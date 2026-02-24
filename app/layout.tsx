@@ -13,6 +13,8 @@ import {
   UserButton,
 } from "@clerk/nextjs";
 import Sidebar from "@/components/Sidebar";
+import { ConvexClientProvider } from "./ConvexClientProvider";
+import { Unauthenticated } from "convex/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,37 +38,15 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} flex antialiased`}
-        >
-          <header className=" w-14 bottom-0 left-0 justify-center h-screen items-end flex bg-[#FAFAFB] dark:bg-zinc-950 border-[#ECECEE] dark:border-zinc-800 border-r py-4">
-            <SignedOut>
-              <div className="flex gap-2">
-                <SignInButton>
-                  <button className="bg-indigo-500 text-white w-20 py-1 cursor-pointer hover:bg-indigo-600 rounded-md">
-                    Sign in
-                  </button>
-                </SignInButton>
-                <SignUpButton>
-                  <button className="bg-indigo-500 text-white w-20 py-1 cursor-pointer hover:bg-indigo-600 rounded-md">
-                    Sign up
-                  </button>
-                </SignUpButton>
-              </div>
-            </SignedOut>
-            <SignedIn>
-              <UserButton />
-            </SignedIn>
-          </header>
-          <main className="w-full flex">
-            <Sidebar/>
-            <div className="w-full">
-             {children}
-            </div>
-          </main>
-        </body>
-      </html>
+      <ConvexClientProvider>
+        <html lang="en">
+          <body
+            className={`${geistSans.variable} ${geistMono.variable} flex antialiased`}
+          >
+            {children}
+          </body>
+        </html>
+      </ConvexClientProvider>
     </ClerkProvider>
   );
 }
