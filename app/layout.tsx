@@ -58,11 +58,13 @@ export default function RootLayout({
               <UserButton />
             </SignedIn>
           </header>
-          <main className="w-full">
+          <main className="w-full flex">
             <div className="max-w-xs h-screen w-full border-r border-[#ECECEE]">
               hello
             </div>
-            {children}
+            <div className="w-full">
+             {children}
+            </div>
           </main>
         </body>
       </html>
