@@ -1,6 +1,17 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import {
+  ClerkProvider,
+  SignedIn,
+  SignedOut,
+  SignIn,
+  SignInButton,
+  SignOutButton,
+  SignUp,
+  SignUpButton,
+  UserButton,
+} from "@clerk/nextjs";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,12 +34,38 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} flex antialiased`}
+        >
+          <header className=" w-14 bottom-0 left-0 justify-center h-screen items-end flex bg-[#FAFAFB] dark:bg-zinc-950 border-[#ECECEE] dark:border-zinc-800 border-r py-4">
+            <SignedOut>
+              <div className="flex gap-2">
+                <SignInButton>
+                  <button className="bg-indigo-500 text-white w-20 py-1 cursor-pointer hover:bg-indigo-600 rounded-md">
+                    Sign in
+                  </button>
+                </SignInButton>
+                <SignUpButton>
+                  <button className="bg-indigo-500 text-white w-20 py-1 cursor-pointer hover:bg-indigo-600 rounded-md">
+                    Sign up
+                  </button>
+                </SignUpButton>
+              </div>
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
+          </header>
+          <main className="w-full">
+            <div className="max-w-xs h-screen w-full border-r border-[#ECECEE]">
+              hello
+            </div>
+            {children}
+          </main>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
