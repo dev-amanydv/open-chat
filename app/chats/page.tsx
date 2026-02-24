@@ -21,7 +21,7 @@ export default function Chat() {
 
   const messages = [
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -30,7 +30,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -39,7 +39,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -48,7 +48,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -57,7 +57,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -66,7 +66,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -75,7 +75,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -84,7 +84,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -93,7 +93,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -102,7 +102,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -111,7 +111,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -120,7 +120,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -130,7 +130,7 @@ export default function Chat() {
     },
     ,
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -139,7 +139,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -148,7 +148,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -157,7 +157,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -166,7 +166,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -175,7 +175,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -184,7 +184,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -193,7 +193,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -202,7 +202,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -211,7 +211,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "you",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -220,7 +220,7 @@ export default function Chat() {
       type: "user",
     },
     {
-      sentFrom: "user-1",
+      sentFrom: "me",
       content: "Hey, Good monring",
       sentAt: "24 Feb 2026, 08:30PM",
       deliveredAt: "24 Feb 2026, 08:38PM",
@@ -231,8 +231,8 @@ export default function Chat() {
   ];
 
   return (
-    <div className="relative h-full">
-      <div className=" h-full flex flex-col gap-3 relative">
+    <div className="h-full relative flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col gap-0 relative">
         <div className="h-full absolute -z-10 inset-0 w-full bg-[#fafafa] text-gray-900">
           <div
             className="absolute inset-0 z-0 pointer-events-none"
@@ -245,16 +245,22 @@ export default function Chat() {
             }}
           />
         </div>
-        <div className="flex flex-col py-2 h-full overflow-hidden gap-2 px-3 w-full">
-            {messages.map((message, key) => (
-          <div key={key} className="bg-white border-neutral-300 border flex flex-col w-fit px-4 py-1 rounded-tl-lg rounded-tr-lg rounded-br-lg">
-            <h1>{message?.content}</h1>
-            <p className="text-xs self-end">{message?.deliveredAt.split(', ')[1]}</p>
-          </div>
-        ))}
+        <div className="flex-1 overflow-y-auto flex flex-col gap-2 px-3 w-full">
+            <div></div>
+          {messages.map((message, key) => (
+            <div
+              key={key}
+              className={`backdrop-blur-sm flex flex-col ${message?.sentFrom === "me" ? "self-end rounded-bl-lg bg-[#357578] text-white" : "rounded-br-lg"} w-fit px-4 py-1 rounded-tl-lg rounded-tr-lg`}
+            >
+              <h1>{message?.content}</h1>
+              <p className={`text-xs self-end ${message?.sentFrom === "me" ? "text-slate-300" : "text-slate-400"}`}>
+                {message?.deliveredAt.split(", ")[1]}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
-      <div className="min-h-14 px-3 w-full absolute bottom-0 gap-3 border-[#ECECEE] border-t flex items-center left-0 bg-[#FAFAFB]">
+      <div className="min-h-14 flex-none px-3 w-full gap-3 border-[#ECECEE] border-t flex items-center bg-[#FAFAFB]">
         <div className="">
           <FiPlus className="size-5" />
         </div>
@@ -267,7 +273,7 @@ export default function Chat() {
           />
           <RiEmojiStickerLine className="absolute size-5 right-1 bottom-3.5" />
         </div>
-        <button className="size-8 bg-[#357578] flex justify-center items-center rounded-full">
+        <button className="size-8 flex-none bg-[#357578] flex justify-center items-center rounded-full">
           <IoSend className="text-white" />
         </button>
       </div>
