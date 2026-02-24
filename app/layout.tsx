@@ -3,18 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import {
   ClerkProvider,
-  SignedIn,
-  SignedOut,
-  SignIn,
-  SignInButton,
-  SignOutButton,
-  SignUp,
-  SignUpButton,
-  UserButton,
 } from "@clerk/nextjs";
-import Sidebar from "@/components/Sidebar";
 import { ConvexClientProvider } from "./ConvexClientProvider";
-import { Unauthenticated } from "convex/react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
