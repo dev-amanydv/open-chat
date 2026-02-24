@@ -11,7 +11,7 @@ export default function ChatLayout({
             <div className="size-3 absolute bottom-0 right-0 bg-neutral-300 rounded-full  border-neutral-200" />
           </div>
           <div className="flex flex-col">
-            <h1 className="font-semibold">Aman Yadav</h1>
+            <h1 className="font-semibold">Dheeraj Tanwar</h1>
             <p className="text-xs text-neutral-400">Active 2m ago</p>
           </div>
         </div>

@@ -12,6 +12,7 @@ import {
   SignUpButton,
   UserButton,
 } from "@clerk/nextjs";
+import Sidebar from "@/components/Sidebar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -59,9 +60,7 @@ export default function RootLayout({
             </SignedIn>
           </header>
           <main className="w-full flex">
-            <div className="max-w-xs h-screen w-full border-r border-[#ECECEE]">
-              hello
-            </div>
+            <Sidebar/>
             <div className="w-full">
              {children}
             </div>
