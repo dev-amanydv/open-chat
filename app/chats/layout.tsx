@@ -2,9 +2,10 @@
 
 import Sidebar from "@/components/Sidebar";
 import { api } from "@/convex/_generated/api";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useParams } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
+import { useEffect } from "react";
 
 export default function ChatLayout({
   children,
@@ -19,6 +20,14 @@ export default function ChatLayout({
     userId ? { userId } : "skip",
   );
 
+  const updateLastSeen = useMutation(api.user.updateLastSeen);
+  useEffect(() => {
+    updateLastSeen();
+    const intervel = setInterval(() => updateLastSeen(), 5000);
+
+    return () => clearInterval(intervel);
+  }, [updateLastSeen]);
+
   return (
     <main className="w-full flex">
       <Sidebar />
@@ -29,7 +38,10 @@ export default function ChatLayout({
               <div className="flex gap-3">
                 <div className="border-neutral-200 relative border size-10 bg-white rounded-full flex items-center justify-center text-sm font-semibold text-neutral-500">
                   {otherUser?.name?.charAt(0).toUpperCase() ?? "?"}
-                  <div className="size-3 absolute bottom-0 right-0 bg-green-400 rounded-full border-2 border-white" />
+                  {otherUser?.lastSeen &&
+                  Date.now() - otherUser.lastSeen < 5000 ? (
+                    <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
+                  ) : null}
                 </div>
                 <div className="flex flex-col">
                   <h1 className="font-semibold">

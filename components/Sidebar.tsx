@@ -47,17 +47,17 @@ export default function Sidebar() {
               (convo) => convo.otherUserId === user._id,
             );
             const isActive = activeUserId === user._id;
+            const isOnline = user.lastSeen && Date.now() - user.lastSeen < 5000;
             return (
               <div
                 key={user._id}
                 onClick={() => router.push(`/chats/${user._id}`)}
                 className={`py-3 px-2 flex gap-2 hover:bg-neutral-100 rounded-md cursor-pointer ${isActive ? "bg-neutral-100" : ""}`}
               >
-                <div className="size-11 flex-none border-neutral-300 border flex justify-center items-center rounded-full">
-                  <div className="size-9 rounded-full border border-neutral-400 bg-neutral-200 flex items-center justify-center text-sm font-semibold text-neutral-600">
+                  <div className="size-10 relative rounded-full border border-neutral-400 bg-neutral-200 flex items-center justify-center text-sm font-semibold text-neutral-600">
                     {user.name.charAt(0).toUpperCase()}
+                    {isOnline && (<span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>)}
                   </div>
-                </div>
                 <div className="w-full pr-3 flex flex-col flex-1">
                   <div className="flex justify-between">
                     <h1 className="font-semibold text-[14px]">{user.name}</h1>
