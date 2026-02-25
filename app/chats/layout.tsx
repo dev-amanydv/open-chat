@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from "@/components/Sidebar";
+import ChatHeaderSkeleton from "@/components/skeletons/ChatHeaderSkeleton";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { useParams } from "next/navigation";
@@ -52,33 +53,35 @@ export default function ChatLayout({
       <div className="w-full">
         <div className="h-screen flex flex-col">
           {userId ? (
-            <div className="bg-[#FAFAFB] flex-none px-3 flex items-center border-[#ECECEE] w-full h-14 border-b">
-              <div className="flex gap-3">
-                <div className="border-neutral-200 relative border size-10 bg-white rounded-full flex items-center justify-center text-sm font-semibold text-neutral-500">
+            !otherUser ? (
+              <ChatHeaderSkeleton />
+            ) : (
+              <div className="bg-[#FAFAFB] flex-none px-3 flex items-center border-[#ECECEE] w-full h-14 border-b">
+                <div className="flex gap-3">
+                  <div className="border-neutral-200 relative border size-10 bg-white rounded-full flex items-center justify-center text-sm font-semibold text-neutral-500">
                   {otherUser?.name?.charAt(0).toUpperCase() ?? "?"}
                   {otherUser?.lastSeen &&
-                  Date.now() - otherUser.lastSeen < 5000 ? (
-                    <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
-                  ) : null}
-                </div>
-                <div className="flex flex-col">
-                  <h1 className="font-semibold">
-                    {otherUser?.name ?? "Loading..."}
-                  </h1>
-                  {otherUser?.lastSeen &&
-                  Date.now() - otherUser.lastSeen < 5000 ? (
-                    <span className="text-xs text-neutral-400">Online</span>
-                  ) : (
-                    <span className="text-xs text-neutral-400">
-                      Last seen{" "}
-                      {otherUser?.lastSeen
-                        ? timeAgo(otherUser.lastSeen)
-                        : "unknown"}
-                    </span>
-                  )}
+                    Date.now() - otherUser.lastSeen < 5000 ? (
+                      <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col">
+                    <h1 className="font-semibold">{otherUser.name}</h1>
+                    {otherUser.lastSeen &&
+                    Date.now() - otherUser.lastSeen < 5000 ? (
+                      <span className="text-xs text-neutral-400">Online</span>
+                    ) : (
+                      <span className="text-xs text-neutral-400">
+                        Last seen{" "}
+                        {otherUser.lastSeen
+                          ? timeAgo(otherUser.lastSeen)
+                          : "unknown"}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )
           ) : null}
           <div className="flex-1 min-h-0">{children}</div>
         </div>

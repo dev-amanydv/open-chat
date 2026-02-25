@@ -9,6 +9,7 @@ import { IoSend } from "react-icons/io5";
 import { RiEmojiStickerLine } from "react-icons/ri";
 import { RiCheckDoubleFill } from "react-icons/ri";
 import { Id } from "@/convex/_generated/dataModel";
+import ChatPageSkeleton from "@/components/skeletons/ChatPageSkeleton";
 
 const MAX_TEXTAREA_HEIGHT = 150;
 
@@ -40,7 +41,6 @@ export default function ChatPage() {
       ta.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
   }, []);
 
-
   const handleSend = async () => {
     const content = messageText.trim();
     if (!content) return;
@@ -66,6 +66,10 @@ export default function ChatPage() {
       handleSend();
     }
   };
+
+  if (conversation === undefined) {
+    return <ChatPageSkeleton />;
+  }
 
   return (
     <div className="h-full relative flex flex-col">
