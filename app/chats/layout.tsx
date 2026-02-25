@@ -58,9 +58,17 @@ export default function ChatLayout({
             ) : (
               <div className="bg-[#FAFAFB] flex-none px-3 flex items-center border-[#ECECEE] w-full h-14 border-b">
                 <div className="flex gap-3">
-                  <div className="border-neutral-200 relative border size-10 bg-white rounded-full flex items-center justify-center text-sm font-semibold text-neutral-500">
-                  {otherUser?.name?.charAt(0).toUpperCase() ?? "?"}
-                  {otherUser?.lastSeen &&
+                  <div className="border-neutral-200 relative border size-10 bg-white rounded-full flex items-center justify-center text-sm font-semibold text-neutral-500 overflow-hidden">
+                    {otherUser?.imageUrl ? (
+                      <img
+                        src={otherUser.imageUrl}
+                        alt={otherUser.name}
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      (otherUser?.name?.charAt(0).toUpperCase() ?? "?")
+                    )}
+                    {otherUser?.lastSeen &&
                     Date.now() - otherUser.lastSeen < 5000 ? (
                       <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
                     ) : null}

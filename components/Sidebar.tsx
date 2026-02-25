@@ -64,8 +64,16 @@ export default function Sidebar() {
                 onClick={() => router.push(`/chats/${user._id}`)}
                 className={`py-3 px-2 flex gap-2 hover:bg-neutral-100 rounded-md cursor-pointer ${isActive ? "bg-neutral-100" : ""}`}
               >
-                <div className="size-10 relative rounded-full border border-neutral-400 bg-neutral-200 flex items-center justify-center text-sm font-semibold text-neutral-600">
-                  {user.name.charAt(0).toUpperCase()}
+                <div className="size-10 relative rounded-full border border-neutral-400 bg-neutral-200 flex items-center justify-center text-sm font-semibold text-neutral-600 overflow-hidden">
+                  {user.imageUrl ? (
+                    <img
+                      src={user.imageUrl}
+                      alt={user.name}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    user.name.charAt(0).toUpperCase()
+                  )}
                   {isOnline && (
                     <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
                   )}
