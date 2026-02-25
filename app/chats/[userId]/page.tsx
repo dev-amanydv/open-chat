@@ -10,6 +10,7 @@ import { RiEmojiStickerLine } from "react-icons/ri";
 import { RiCheckDoubleFill } from "react-icons/ri";
 import { Id } from "@/convex/_generated/dataModel";
 import ChatPageSkeleton from "@/components/skeletons/ChatPageSkeleton";
+import TypingIndicator from "@/components/TypingIndicator";
 
 const MAX_TEXTAREA_HEIGHT = 150;
 
@@ -31,6 +32,37 @@ export default function ChatPage() {
     api.chats.getOrCreateConversation,
   );
   const sendMessage = useMutation(api.chats.sendMessage);
+  const setTyping = useMutation(api.typing.setTyping);
+  const otherUserLastTyped = useQuery(
+    api.typing.getTypingStatus,
+    conversation
+      ? { conversationId: conversation._id, otherUserId: userId }
+      : "skip",
+  );
+
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
+
+  useEffect(() => {
+    if (!otherUserLastTyped) {
+      setIsOtherUserTyping(false);
+      return;
+    }
+    setIsOtherUserTyping(Date.now() - otherUserLastTyped < 3000);
+    const interval = setInterval(() => {
+      setIsOtherUserTyping(Date.now() - otherUserLastTyped < 3000);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [otherUserLastTyped]);
+
+  const lastTypingSent = useRef(0);
+  const handleTyping = useCallback(() => {
+    if (!conversation) return;
+    const now = Date.now();
+    if (now - lastTypingSent.current > 2000) {
+      lastTypingSent.current = now;
+      setTyping({ conversationId: conversation._id });
+    }
+  }, [conversation, setTyping]);
 
   const handleInput = useCallback(() => {
     const ta = textareaRef.current;
@@ -131,6 +163,11 @@ export default function ChatPage() {
               );
             })
           )}
+          {isOtherUserTyping && (
+            <div className="transition-opacity duration-300 ease-in-out">
+              <TypingIndicator />
+            </div>
+          )}
         </div>
       </div>
       <div className="min-h-14 flex-none px-3 w-full gap-3 border-[#ECECEE] border-t flex items-center bg-[#FAFAFB]">
@@ -142,7 +179,10 @@ export default function ChatPage() {
             ref={textareaRef}
             rows={1}
             value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
+            onChange={(e) => {
+              setMessageText(e.target.value);
+              handleTyping();
+            }}
             onInput={handleInput}
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."

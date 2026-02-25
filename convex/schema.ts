@@ -29,4 +29,9 @@ export default defineSchema({
     }),
     isDeleted: v.boolean(),
   }),
+  typingIndicators: defineTable({
+    userId: v.id("users"),
+    conversationId: v.id("conversations"),
+    lastTyped: v.number(),
+  }).index("by_conversation", ["conversationId"]),
 });
