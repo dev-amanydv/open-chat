@@ -2,7 +2,7 @@
 import { api } from "@/convex/_generated/api";
 import { UserButton } from "@clerk/nextjs";
 import { Authenticated, useMutation, useQuery } from "convex/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CiSearch } from "react-icons/ci";
 import { IoCreateOutline } from "react-icons/io5";
@@ -15,10 +15,13 @@ export default function Sidebar() {
   const router = useRouter();
   const params = useParams();
   const activeUserId = params?.userId as string | undefined;
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     syncUser();
   }, [syncUser]);
+
+  const searchedUsers = users?.filter((user) => user.name.toLowerCase().trim().includes(search.toLowerCase().trim()))
 
   return (
     <div className="max-w-xs px-0 h-screen flex flex-col w-full border-r border-[#ECECEE]">
@@ -28,6 +31,7 @@ export default function Sidebar() {
       </div>
       <div className="flex px-2 flex-none items-center relative">
         <input
+          onChange={(e) => setSearch(e.target.value)}
           className="border w-full rounded-md pl-7 text-sm py-1 focus:outline-0 border-neutral-300"
           type="text"
           placeholder="Search"
@@ -42,7 +46,7 @@ export default function Sidebar() {
             No users found
           </div>
         ) : (
-          users.map((user) => {
+          searchedUsers && searchedUsers.map((user) => {
             const convo = conversations?.find(
               (convo) => convo.otherUserId === user._id,
             );
