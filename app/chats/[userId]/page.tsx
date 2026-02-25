@@ -6,8 +6,11 @@ import { useParams } from "next/navigation";
 import { useRef, useCallback, useState, useEffect } from "react";
 import { FiPlus } from "react-icons/fi";
 import { IoSend } from "react-icons/io5";
-import { RiEmojiStickerLine } from "react-icons/ri";
-import { RiCheckDoubleFill } from "react-icons/ri";
+import {
+  RiEmojiStickerLine,
+  RiCheckDoubleFill,
+  RiCheckFill,
+} from "react-icons/ri";
 import { Id } from "@/convex/_generated/dataModel";
 import ChatPageSkeleton from "@/components/skeletons/ChatPageSkeleton";
 import TypingIndicator from "@/components/TypingIndicator";
@@ -33,6 +36,12 @@ export default function ChatPage() {
   );
   const sendMessage = useMutation(api.chats.sendMessage);
   const setTyping = useMutation(api.typing.setTyping);
+  const markAsSeen = useMutation(api.chats.markAsSeen);
+
+  useEffect(() => {
+    if (!conversation) return;
+    markAsSeen({ conversationId: conversation._id });
+  }, [conversation, messages, markAsSeen]);
   const otherUserLastTyped = useQuery(
     api.typing.getTypingStatus,
     conversation
@@ -149,15 +158,18 @@ export default function ChatPage() {
                         minute: "2-digit",
                       })}
                     </p>
-                    {isMe && (
-                      <RiCheckDoubleFill
-                        className={`text-xs ${
-                          message.status === "seen"
-                            ? "text-blue-300"
-                            : "text-slate-300"
-                        }`}
-                      />
-                    )}
+                    {isMe &&
+                      (message.status === "sent" ? (
+                        <RiCheckFill className="text-xs text-slate-300" />
+                      ) : (
+                        <RiCheckDoubleFill
+                          className={`text-xs ${
+                            message.status === "seen"
+                              ? "text-blue-300"
+                              : "text-slate-300"
+                          }`}
+                        />
+                      ))}
                   </div>
                 </div>
               );

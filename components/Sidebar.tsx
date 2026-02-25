@@ -8,6 +8,49 @@ import { CiSearch } from "react-icons/ci";
 import { IoCreateOutline } from "react-icons/io5";
 import { RiCheckDoubleFill } from "react-icons/ri";
 import SidebarSkeleton from "@/components/skeletons/SidebarSkeleton";
+import { Id } from "@/convex/_generated/dataModel";
+
+function UserSubtitle({
+  userId,
+  convo,
+}: {
+  userId: Id<"users">;
+  convo?: { lastMessage: string };
+}) {
+  const lastTyped = useQuery(api.typing.getTypingForUser, { userId });
+  const [isTyping, setIsTyping] = useState(false);
+
+  useEffect(() => {
+    if (!lastTyped) {
+      setIsTyping(false);
+      return;
+    }
+    setIsTyping(Date.now() - lastTyped < 3000);
+    const interval = setInterval(() => {
+      setIsTyping(Date.now() - lastTyped < 3000);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lastTyped]);
+
+  if (isTyping) {
+    return <p className="text-[13px] font-medium text-green-500">typing...</p>;
+  }
+
+  if (convo) {
+    return (
+      <div className="flex items-center gap-1">
+        <RiCheckDoubleFill className="text-neutral-400" />
+        <p className="text-neutral-500 text-[13px]">{convo.lastMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <p className="text-neutral-400 text-[13px] italic">
+      Tap to start conversation
+    </p>
+  );
+}
 
 export default function Sidebar() {
   const users = useQuery(api.user.getAllUsers);
@@ -83,18 +126,7 @@ export default function Sidebar() {
                     <h1 className="font-semibold text-[14px]">{user.name}</h1>
                   </div>
                   <div className="w-full flex justify-between">
-                    {convo ? (
-                      <div className="flex items-center gap-1">
-                        <RiCheckDoubleFill className="text-neutral-400" />
-                        <p className="text-neutral-500 text-[13px]">
-                          {convo.lastMessage}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-neutral-400 text-[13px] italic">
-                        Tap to start conversation
-                      </p>
-                    )}
+                    <UserSubtitle userId={user._id} convo={convo} />
                   </div>
                 </div>
               </div>

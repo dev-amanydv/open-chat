@@ -52,3 +52,19 @@ export const getTypingStatus = query({
     return indicator?.lastTyped ?? null;
   },
 });
+
+export const getTypingForUser = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const indicators = await ctx.db
+      .query("typingIndicators")
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .collect();
+
+    if (indicators.length === 0) return null;
+    const latest = indicators.reduce((a, b) =>
+      a.lastTyped > b.lastTyped ? a : b,
+    );
+    return latest.lastTyped;
+  },
+});

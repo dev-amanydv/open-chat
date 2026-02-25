@@ -40,12 +40,17 @@ export default function ChatLayout({
   );
 
   const updateLastSeen = useMutation(api.user.updateLastSeen);
+  const markAllAsDelivered = useMutation(api.chats.markAllAsDelivered);
   useEffect(() => {
     updateLastSeen();
-    const intervel = setInterval(() => updateLastSeen(), 5000);
+    markAllAsDelivered();
+    const intervel = setInterval(() => {
+      updateLastSeen();
+      markAllAsDelivered();
+    }, 5000);
 
     return () => clearInterval(intervel);
-  }, [updateLastSeen]);
+  }, [updateLastSeen, markAllAsDelivered]);
 
   return (
     <main className="w-full flex">
