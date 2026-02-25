@@ -3,6 +3,7 @@ import { api } from "@/convex/_generated/api";
 import { UserButton } from "@clerk/nextjs";
 import { Authenticated, useMutation, useQuery } from "convex/react";
 import { useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { CiSearch } from "react-icons/ci";
 import { IoCreateOutline } from "react-icons/io5";
 import { RiCheckDoubleFill } from "react-icons/ri";
@@ -11,6 +12,9 @@ export default function Sidebar() {
   const users = useQuery(api.user.getAllUsers);
   const conversations = useQuery(api.chats.getConversationsForCurrentUser);
   const syncUser = useMutation(api.user.getForCurrentUser);
+  const router = useRouter();
+  const params = useParams();
+  const activeUserId = params?.userId as string | undefined;
 
   useEffect(() => {
     syncUser();
@@ -39,11 +43,15 @@ export default function Sidebar() {
           </div>
         ) : (
           users.map((user) => {
-            const convo = conversations?.find((convo) => convo.otherUserId === user._id);
+            const convo = conversations?.find(
+              (convo) => convo.otherUserId === user._id,
+            );
+            const isActive = activeUserId === user._id;
             return (
               <div
                 key={user._id}
-                className="py-3 px-2 flex gap-2 hover:bg-neutral-100 rounded-md cursor-pointer"
+                onClick={() => router.push(`/chats/${user._id}`)}
+                className={`py-3 px-2 flex gap-2 hover:bg-neutral-100 rounded-md cursor-pointer ${isActive ? "bg-neutral-100" : ""}`}
               >
                 <div className="size-11 flex-none border-neutral-300 border flex justify-center items-center rounded-full">
                   <div className="size-9 rounded-full border border-neutral-400 bg-neutral-200 flex items-center justify-center text-sm font-semibold text-neutral-600">
