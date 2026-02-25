@@ -33,15 +33,25 @@ export const getConversationsForCurrentUser = query({
       convo.participants.includes(currentUser._id),
     );
 
-    return myConversations.map((convo) => {
+    const results = [];
+    for (const convo of myConversations) {
       const otherUserId = convo.participants.find((p) => p !== currentUser._id);
-      return {
+      const messages = await ctx.db
+        .query("messages")
+        .filter((q) => q.eq(q.field("conversationId"), convo._id))
+        .collect();
+      const unreadCount = messages.filter(
+        (m) => m.sender !== currentUser._id && m.status !== "seen",
+      ).length;
+      results.push({
         otherUserId,
         conversationId: convo._id,
         lastMessage: convo.lastMessage,
         unreadCounts: convo.unreadCounts,
-      };
-    });
+        unreadCount,
+      });
+    }
+    return results;
   },
 });
 

@@ -13,9 +13,11 @@ import { Id } from "@/convex/_generated/dataModel";
 function UserSubtitle({
   userId,
   convo,
+  unreadCount,
 }: {
   userId: Id<"users">;
   convo?: { lastMessage: string };
+  unreadCount: number;
 }) {
   const lastTyped = useQuery(api.typing.getTypingForUser, { userId });
   const [isTyping, setIsTyping] = useState(false);
@@ -39,8 +41,12 @@ function UserSubtitle({
   if (convo) {
     return (
       <div className="flex items-center gap-1">
-        <RiCheckDoubleFill className="text-neutral-400" />
-        <p className="text-neutral-500 text-[13px]">{convo.lastMessage}</p>
+        <RiCheckDoubleFill className="text-neutral-400 flex-none" />
+        <p
+          className={`text-[13px] truncate ${unreadCount > 0 ? "font-semibold text-neutral-800" : "text-neutral-500"}`}
+        >
+          {convo.lastMessage}
+        </p>
       </div>
     );
   }
@@ -122,11 +128,24 @@ export default function Sidebar() {
                   )}
                 </div>
                 <div className="w-full pr-3 flex flex-col flex-1">
-                  <div className="flex justify-between">
-                    <h1 className="font-semibold text-[14px]">{user.name}</h1>
+                  <div className="flex justify-between items-center">
+                    <h1
+                      className={`text-[14px] ${convo && convo.unreadCount > 0 ? "font-bold" : "font-semibold"}`}
+                    >
+                      {user.name}
+                    </h1>
+                    {convo && convo.unreadCount > 0 && (
+                      <span className="bg-green-500 text-white text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                        {convo.unreadCount}
+                      </span>
+                    )}
                   </div>
                   <div className="w-full flex justify-between">
-                    <UserSubtitle userId={user._id} convo={convo} />
+                    <UserSubtitle
+                      userId={user._id}
+                      convo={convo}
+                      unreadCount={convo?.unreadCount ?? 0}
+                    />
                   </div>
                 </div>
               </div>
