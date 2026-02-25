@@ -43,12 +43,15 @@ export const getConversationsForCurrentUser = query({
       const unreadCount = messages.filter(
         (m) => m.sender !== currentUser._id && m.status !== "seen",
       ).length;
+      const lastMsg =
+        messages.length > 0 ? messages[messages.length - 1] : null;
       results.push({
         otherUserId,
         conversationId: convo._id,
         lastMessage: convo.lastMessage,
         unreadCounts: convo.unreadCounts,
         unreadCount,
+        lastMessageSentByMe: lastMsg?.sender === currentUser._id,
       });
     }
     return results;

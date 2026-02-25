@@ -14,6 +14,7 @@ import {
 import { Id } from "@/convex/_generated/dataModel";
 import ChatPageSkeleton from "@/components/skeletons/ChatPageSkeleton";
 import TypingIndicator from "@/components/TypingIndicator";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 
 const MAX_TEXTAREA_HEIGHT = 150;
 
@@ -22,6 +23,25 @@ export default function ChatPage() {
   const userId = params.userId as Id<"users">;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [messageText, setMessageText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(e.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageText((prev) => prev + emojiData.emoji);
+  };
 
   const currentUser = useQuery(api.chats.getCurrentUser);
   const conversation = useQuery(api.chats.getConversationByUsers, {
@@ -200,7 +220,23 @@ export default function ChatPage() {
             placeholder="Type a message..."
             className="w-full border pr-7 h-9 focus:outline-0 border-neutral-300 px-2 bg-white py-1 rounded-xl resize-none overflow-hidden"
           />
-          <RiEmojiStickerLine className="absolute size-5 right-1 bottom-3.5" />
+          <RiEmojiStickerLine
+            className="absolute size-5 right-1 bottom-3.5 cursor-pointer hover:text-neutral-600 text-neutral-400 transition-colors"
+            onClick={() => setShowEmojiPicker((prev) => !prev)}
+          />
+          {showEmojiPicker && (
+            <div
+              ref={emojiPickerRef}
+              className="absolute bottom-12 right-0 z-50"
+            >
+              <EmojiPicker
+                onEmojiClick={onEmojiClick}
+                width={320}
+                height={400}
+                searchPlaceholder="Search emoji..."
+              />
+            </div>
+          )}
         </div>
         <button
           onClick={handleSend}

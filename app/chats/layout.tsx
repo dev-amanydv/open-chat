@@ -1,6 +1,7 @@
 "use client";
 
 import Sidebar from "@/components/Sidebar";
+import Navbar from "@/components/Navbar";
 import ChatHeaderSkeleton from "@/components/skeletons/ChatHeaderSkeleton";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
@@ -54,6 +55,7 @@ export default function ChatLayout({
 
   return (
     <main className="w-full flex">
+      <Navbar />
       <Sidebar />
       <div className="w-full">
         <div className="h-screen flex flex-col">

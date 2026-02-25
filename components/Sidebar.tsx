@@ -1,7 +1,6 @@
 "use client";
 import { api } from "@/convex/_generated/api";
-import { UserButton } from "@clerk/nextjs";
-import { Authenticated, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CiSearch } from "react-icons/ci";
@@ -16,7 +15,7 @@ function UserSubtitle({
   unreadCount,
 }: {
   userId: Id<"users">;
-  convo?: { lastMessage: string };
+  convo?: { lastMessage: string; lastMessageSentByMe: boolean };
   unreadCount: number;
 }) {
   const lastTyped = useQuery(api.typing.getTypingForUser, { userId });
@@ -41,7 +40,9 @@ function UserSubtitle({
   if (convo) {
     return (
       <div className="flex items-center gap-1">
-        <RiCheckDoubleFill className="text-neutral-400 flex-none" />
+        {convo.lastMessageSentByMe && (
+          <RiCheckDoubleFill className="text-neutral-400 flex-none" />
+        )}
         <p
           className={`text-[13px] truncate ${unreadCount > 0 ? "font-semibold text-neutral-800" : "text-neutral-500"}`}
         >
@@ -153,11 +154,6 @@ export default function Sidebar() {
           })
         )}
       </div>
-      <Authenticated>
-        <div className="flex-none px-3 py-3 border-t border-[#ECECEE]">
-          <UserButton />
-        </div>
-      </Authenticated>
     </div>
   );
 }
