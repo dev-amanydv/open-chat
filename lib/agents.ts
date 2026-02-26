@@ -1,9 +1,8 @@
 import { IconType } from "react-icons";
 import { BsCalendar2Check } from "react-icons/bs";
-import { VscCode } from "react-icons/vsc";
-import { TbChartBar } from "react-icons/tb";
-import { HiOutlinePencilSquare } from "react-icons/hi2";
-import { PiMagnifyingGlass } from "react-icons/pi";
+import { HiOutlineChatBubbleLeftRight } from "react-icons/hi2";
+import { HiOutlineEnvelope } from "react-icons/hi2";
+import { HiBolt } from "react-icons/hi2";
 
 export interface Agent {
   id: string;
@@ -12,58 +11,53 @@ export interface Agent {
   icon: IconType;
   color: string;
   bgGradient: string;
+  status?: "active" | "coming_soon";
 }
 
 export const agents: Agent[] = [
   {
-    id: "meeting-scheduler",
-    name: "Meeting Scheduler",
+    id: "meeting-mind",
+    name: "MeetingMind",
     description:
-      "Schedule meetings with Aman Yadav. I'll check availability and book the perfect time slot for you.",
+      "Your elite scheduling assistant. I check availability, book meetings, and make sure the right people are in the right place at the right time.",
     icon: BsCalendar2Check,
     color: "#6C63FF",
     bgGradient:
       "linear-gradient(135deg, rgba(108,99,255,0.08) 0%, rgba(108,99,255,0.02) 100%)",
+    status: "active",
   },
   {
-    id: "code-reviewer",
-    name: "Code Reviewer",
+    id: "chat-mind",
+    name: "ChatMind",
     description:
-      "Paste your code and I'll review it for best practices, potential bugs, and performance improvements.",
-    icon: VscCode,
+      "Your personal communications manager. I search, summarize, send, and manage all your in-platform messages.",
+    icon: HiOutlineChatBubbleLeftRight,
     color: "#10B981",
     bgGradient:
       "linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%)",
+    status: "active",
   },
   {
-    id: "data-analyst",
-    name: "Data Analyst",
+    id: "mail-mind",
+    name: "MailMind",
     description:
-      "Ask me to analyze data, generate insights, or help you understand complex datasets.",
-    icon: TbChartBar,
+      "Your personal email chief of staff. Read, search, draft, send, and manage your Gmail with intelligence.",
+    icon: HiOutlineEnvelope,
     color: "#F59E0B",
     bgGradient:
       "linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.02) 100%)",
+    status: "coming_soon",
   },
   {
-    id: "writing-assistant",
-    name: "Writing Assistant",
+    id: "master-mind",
+    name: "MasterMind",
     description:
-      "I help you draft, edit, and polish your writing — emails, docs, or creative content.",
-    icon: HiOutlinePencilSquare,
+      "The command center. I coordinate all agents, plan multi-step workflows, and give you a unified view of your digital workspace.",
+    icon: HiBolt,
     color: "#EC4899",
     bgGradient:
       "linear-gradient(135deg, rgba(236,72,153,0.08) 0%, rgba(236,72,153,0.02) 100%)",
-  },
-  {
-    id: "research-assistant",
-    name: "Research Assistant",
-    description:
-      "I can help you research topics, summarize articles, and compile information quickly.",
-    icon: PiMagnifyingGlass,
-    color: "#14B8A6",
-    bgGradient:
-      "linear-gradient(135deg, rgba(20,184,166,0.08) 0%, rgba(20,184,166,0.02) 100%)",
+    status: "active",
   },
 ];
 
@@ -89,63 +83,6 @@ export interface AgentMessage {
   timestamp: number;
   booking?: BookingDetails;
   rating?: "up" | "down";
-}
-
-function parseRelativeDate(text: string): Date | null {
-  const lower = text.toLowerCase();
-  const now = new Date();
-
-  if (lower.includes("today")) return now;
-  if (lower.includes("tomorrow")) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + 1);
-    return d;
-  }
-
-  const dayNames = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-  ];
-  for (let i = 0; i < dayNames.length; i++) {
-    if (lower.includes(dayNames[i])) {
-      const d = new Date(now);
-      const diff = (i - d.getDay() + 7) % 7 || 7;
-      d.setDate(d.getDate() + diff);
-      return d;
-    }
-  }
-
-  const dateMatch = text.match(
-    /(\d{4}-\d{2}-\d{2})|(\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\b)/i,
-  );
-  if (dateMatch) {
-    const parsed = new Date(dateMatch[0]);
-    if (!isNaN(parsed.getTime())) return parsed;
-  }
-
-  return null;
-}
-
-function parseTime(text: string): { hour: number; minute: number } | null {
-  const match = text.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-  if (!match) return null;
-
-  let hour = parseInt(match[1], 10);
-  const minute = match[2] ? parseInt(match[2], 10) : 0;
-  const ampm = match[3]?.toLowerCase();
-
-  if (ampm === "pm" && hour < 12) hour += 12;
-  if (ampm === "am" && hour === 12) hour = 0;
-
-  if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-    return { hour, minute };
-  }
-  return null;
 }
 
 export async function processAgentMessage(
@@ -185,16 +122,15 @@ export async function processAgentMessage(
 
     const reply: string = data.reply;
 
-    if (agentId === "meeting-scheduler") {
-      const jsonMatch = reply.match(/\{[\s\S]*?"action"\s*:[\s\S]*?\}/);
-      if (jsonMatch) {
-        try {
-          const action = JSON.parse(jsonMatch[0]);
+    const jsonMatch = reply.match(/\{[\s\S]*?"action"\s*:[\s\S]*?\}/);
+    if (jsonMatch) {
+      try {
+        const action = JSON.parse(jsonMatch[0]);
 
+        if (agentId === "meeting-mind") {
           if (action.action === "list_slots" && action.date) {
             return await handleListSlots(action.date, id, timestamp);
           }
-
           if (
             action.action === "check_availability" &&
             action.date &&
@@ -203,7 +139,6 @@ export async function processAgentMessage(
             const [hours, minutes] = action.time.split(":").map(Number);
             const requestedDate = new Date(action.date + "T00:00:00");
             requestedDate.setHours(hours, minutes, 0, 0);
-
             return await handleMeetingBooking(
               requestedDate,
               attendeeName,
@@ -212,8 +147,25 @@ export async function processAgentMessage(
               timestamp,
             );
           }
-        } catch {
         }
+
+        if (agentId === "chat-mind") {
+          return await handleChatMindAction(action, id, timestamp);
+        }
+
+        if (agentId === "master-mind") {
+          if (action.action === "delegate") {
+            return await handleMasterMindDelegate(
+              action,
+              conversationHistory,
+              attendeeName,
+              attendeeEmail,
+              id,
+              timestamp,
+            );
+          }
+        }
+      } catch {
       }
     }
 
@@ -227,6 +179,96 @@ export async function processAgentMessage(
     };
   }
 }
+
+
+async function handleChatMindAction(
+  action: Record<string, string>,
+  id: string,
+  timestamp: number,
+): Promise<AgentMessage> {
+  try {
+    const res = await fetch("/api/agents/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(action),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return {
+        id,
+        role: "agent",
+        content:
+          data.error ??
+          "I couldn't access your messages right now. Please try again.",
+        timestamp,
+      };
+    }
+
+    return { id, role: "agent", content: data.result, timestamp };
+  } catch {
+    return {
+      id,
+      role: "agent",
+      content: "I had trouble accessing your messages. Please try again.",
+      timestamp,
+    };
+  }
+}
+
+
+async function handleMasterMindDelegate(
+  action: Record<string, string>,
+  conversationHistory: AgentMessage[],
+  attendeeName: string,
+  attendeeEmail: string,
+  id: string,
+  timestamp: number,
+): Promise<AgentMessage> {
+  const targetAgent = action.agent;
+  const instruction = action.instruction;
+
+  if (!targetAgent || !instruction) {
+    return {
+      id,
+      role: "agent",
+      content:
+        "I need both a target agent and an instruction to delegate. Could you clarify?",
+      timestamp,
+    };
+  }
+
+  const validAgents = ["meeting-mind", "chat-mind"];
+  if (!validAgents.includes(targetAgent)) {
+    return {
+      id,
+      role: "agent",
+      content: `I can currently delegate to MeetingMind and ChatMind. ${targetAgent === "mail-mind" ? "MailMind is coming soon!" : ""}`,
+      timestamp,
+    };
+  }
+
+  const delegatedResult = await processAgentMessage(
+    targetAgent,
+    instruction,
+    [],
+    attendeeName,
+    attendeeEmail,
+  );
+
+  const agentName = targetAgent === "meeting-mind" ? "MeetingMind" : "ChatMind";
+  const agentIcon = targetAgent === "meeting-mind" ? "📅" : "💬";
+
+  return {
+    id,
+    role: "agent",
+    content: `${agentIcon} **${agentName}** completed the task:\n\n${delegatedResult.content}`,
+    timestamp,
+    booking: delegatedResult.booking,
+  };
+}
+
 
 async function handleListSlots(
   dateStr: string,

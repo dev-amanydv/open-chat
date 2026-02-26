@@ -26,36 +26,25 @@ import { getAgentById, AgentMessage, processAgentMessage } from "@/lib/agents";
 const MAX_TEXTAREA_HEIGHT = 150;
 
 const STARTER_SUGGESTIONS: Record<string, string[]> = {
-  "meeting-scheduler": [
-    "📅 Show available slots for today",
-    "🕐 Book a meeting tomorrow at 3 PM",
-    "📆 What times are free this week?",
-    "⚡ Schedule a quick call",
+  "meeting-mind": [
+    "Show available slots for tomorrow",
+    "Book a meeting at 3 PM",
+    "What times are free next week?",
+    "Schedule a quick call",
   ],
-  "code-reviewer": [
-    "🔍 Review my React component",
-    "🛡️ Check this code for security issues",
-    "⚡ Optimize this function for performance",
-    "📝 Review my TypeScript types",
+  "chat-mind": [
+    "Show my recent conversations",
+    "Search messages about the project",
+    "Summarize my chat with Aman",
+    "Who hasn't replied to me?",
   ],
-  "data-analyst": [
-    "📊 Help me analyze sales trends",
-    "📈 Compare these two datasets",
-    "🎯 Find patterns in my user data",
-    "📉 Explain this metric drop",
+  "master-mind": [
+    "What did I do today?",
+    "Book a meeting and notify them",
+    "Actions I need to take?",
+    "Summarize my recent activity",
   ],
-  "writing-assistant": [
-    "✉️ Draft a professional email",
-    "📝 Help me write a blog post",
-    "✨ Polish this paragraph",
-    "📄 Create project documentation",
-  ],
-  "research-assistant": [
-    "🔬 Research latest AI trends",
-    "📖 Summarize this topic for me",
-    "🧠 Compare these two technologies",
-    "📋 Create a literature review",
-  ],
+  "mail-mind": ["Read my unread emails", "Draft a reply to the client"],
 };
 
 function getFollowUpSuggestions(
@@ -65,73 +54,49 @@ function getFollowUpSuggestions(
 ): string[] {
   if (hasBooking) {
     return [
-      "📅 Schedule another meeting",
-      "🔄 Reschedule this meeting",
-      "📋 Show my upcoming meetings",
+      "Schedule another meeting",
+      "Reschedule this meeting",
+      "Send them a confirmation message",
     ];
   }
 
   const lower = lastMessage.toLowerCase();
 
-  if (agentId === "meeting-scheduler") {
+  if (agentId === "meeting-mind") {
     if (lower.includes("available slots") || lower.includes("here are")) {
       return [
-        "Book the first available slot",
-        "Show me afternoon slots",
-        "Try a different date",
+        "Book the earliest available slot",
+        "Show me afternoon slots instead",
+        "How about next week?",
       ];
     }
     if (lower.includes("not available") || lower.includes("no available")) {
-      return [
-        "Show me tomorrow's slots",
-        "Try next week instead",
-        "Any morning slots available?",
-      ];
+      return ["What about tomorrow?", "Show me next week's slots"];
     }
     return [
-      "📅 Check availability for tomorrow",
-      "🕐 Book a slot for this afternoon",
-      "📆 Show me this week's openings",
+      "Check availability for tomorrow",
+      "Book a slot for this afternoon",
     ];
   }
 
-  if (agentId === "code-reviewer") {
-    if (lower.includes("security") || lower.includes("vulnerab")) {
-      return [
-        "How do I fix this?",
-        "Show a secure alternative",
-        "Any other concerns?",
-      ];
+  if (agentId === "chat-mind") {
+    if (
+      lower.includes("recent conversations") ||
+      lower.includes("conversations:")
+    ) {
+      return ["Summarize the latest one", "Any unreplied messages?"];
     }
-    return [
-      "Review another snippet",
-      "Explain this pattern more",
-      "Suggest best practices",
-    ];
+    if (lower.includes("search results")) {
+      return ["Summarize this conversation", "Reply to them"];
+    }
+    if (lower.includes("ready to send")) {
+      return ["confirm", "Edit the message", "Cancel"];
+    }
+    return ["Show recent conversations", "Check pending replies"];
   }
 
-  if (agentId === "data-analyst") {
-    return [
-      "Visualize this data",
-      "Dig deeper into this trend",
-      "Compare with last quarter",
-    ];
-  }
-
-  if (agentId === "writing-assistant") {
-    return [
-      "Make it more concise",
-      "Change to a formal tone",
-      "Add a call-to-action",
-    ];
-  }
-
-  if (agentId === "research-assistant") {
-    return [
-      "Go deeper on this topic",
-      "Find counterarguments",
-      "Summarize the key points",
-    ];
+  if (agentId === "master-mind") {
+    return ["Explain your plan", "Do it", "Let's change the plan"];
   }
 
   return [];
@@ -346,27 +311,45 @@ export default function AgentChatPage() {
                 ))}
               </div>
 
-              <p className="text-[11px] text-neutral-300 uppercase tracking-widest mb-3 font-medium">
-                Try asking
-              </p>
-              <div className="grid grid-cols-2 gap-2 w-full max-w-md">
-                {starters.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => sendMessage(s)}
-                    disabled={!chatId}
-                    className="text-left text-[13px] px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer suggestion-chip"
-                    style={{
-                      background: "rgba(255,255,255,0.7)",
-                      backdropFilter: "blur(8px)",
-                      border: "1px solid rgba(0,0,0,0.05)",
-                      color: "#555",
-                    }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              {agent.status === "coming_soon" ? (
+                <div
+                  className="mt-4 px-6 py-4 rounded-2xl flex items-center justify-center text-center max-w-sm"
+                  style={{
+                    background: `${agent.color}0A`,
+                    border: `1px solid ${agent.color}15`,
+                    color: agent.color,
+                  }}
+                >
+                  <p className="text-[14px] font-medium">
+                    This agent is currently in development and will be available
+                    soon!
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[11px] text-neutral-300 uppercase tracking-widest mb-3 font-medium">
+                    Try asking
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+                    {starters.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => sendMessage(s)}
+                        disabled={!chatId}
+                        className="text-left text-[13px] px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer suggestion-chip"
+                        style={{
+                          background: "rgba(255,255,255,0.7)",
+                          backdropFilter: "blur(8px)",
+                          border: "1px solid rgba(0,0,0,0.05)",
+                          color: "#555",
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -628,77 +611,74 @@ export default function AgentChatPage() {
         </div>
       </div>
 
-      <div className="flex-none px-4 pb-4 pt-2 max-w-3xl mx-auto w-full">
-        <div
-          className="flex items-end gap-2 rounded-2xl px-4 py-2 agent-input-bar"
-          style={{
-            background: "rgba(255,255,255,0.8)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            border: "1px solid rgba(0,0,0,0.06)",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.02)",
-          }}
-        >
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder={`Message ${agent.name}...`}
-            className="flex-1 bg-transparent text-[14px] text-neutral-800 placeholder:text-neutral-300 focus:outline-none resize-none h-9 py-2 leading-snug"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isThinking}
-            className="size-8 flex-none rounded-xl flex items-center justify-center transition-all duration-200 mb-0.5"
+      {agent.status !== "coming_soon" && (
+        <div className="flex-none px-4 pb-4 pt-2 max-w-3xl mx-auto w-full">
+          <div
+            className="flex items-end gap-2 rounded-2xl px-4 py-2 agent-input-bar"
             style={{
-              background: input.trim() ? agent.color : "transparent",
-              color: input.trim() ? "#fff" : "#ccc",
-              opacity: isThinking ? 0.5 : 1,
-              transform: input.trim() ? "scale(1)" : "scale(0.9)",
+              background: "rgba(255,255,255,0.8)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              border: "1px solid rgba(0,0,0,0.06)",
+              boxShadow:
+                "0 2px 8px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.02)",
             }}
           >
-            <IoSend className="size-3.5" />
-          </button>
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder={`Message ${agent.name}...`}
+              className="flex-1 bg-transparent text-[14px] text-neutral-800 placeholder:text-neutral-300 focus:outline-none resize-none h-9 py-2 leading-snug"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || isThinking}
+              className="size-8 flex-none rounded-xl flex items-center justify-center transition-all duration-200 mb-0.5"
+              style={{
+                background: input.trim() ? agent.color : "transparent",
+                color: input.trim() ? "#fff" : "#ccc",
+                opacity: isThinking ? 0.5 : 1,
+                transform: input.trim() ? "scale(1)" : "scale(0.9)",
+              }}
+            >
+              <IoSend className="size-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 function getCapabilities(agentId: string): string[] {
   const caps: Record<string, string[]> = {
-    "meeting-scheduler": [
+    "meeting-mind": [
       "Check Availability",
       "Book Meetings",
       "Smart Scheduling",
       "Calendar Sync",
     ],
-    "code-reviewer": [
-      "Bug Detection",
-      "Security Audit",
-      "Performance Tips",
-      "Best Practices",
+    "chat-mind": [
+      "Search Messages",
+      "Summarize Threads",
+      "Send Messages",
+      "Track Reminders",
     ],
-    "data-analyst": [
-      "Trend Analysis",
-      "Data Visualization",
-      "Statistical Insights",
-      "Anomaly Detection",
+    "master-mind": [
+      "Cross-Agent Sync",
+      "Multi-Step Planning",
+      "Activity Dashboards",
+      "Task Delegation",
     ],
-    "writing-assistant": [
-      "Drafting",
-      "Editing & Polish",
-      "Tone Matching",
-      "SEO Writing",
-    ],
-    "research-assistant": [
-      "Topic Research",
-      "Summarization",
-      "Fact Checking",
-      "Synthesis",
+    "mail-mind": [
+      "Gmail Integration",
+      "Smart Drafts",
+      "Inbox Zero",
+      "Thread Search",
     ],
   };
   return caps[agentId] ?? [];

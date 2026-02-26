@@ -65,15 +65,22 @@ export default function AgentSidebar() {
                 <IconComponent className="size-[18px]" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2
-                  className={`text-[14px] truncate ${
-                    isActive
-                      ? "font-semibold text-neutral-900"
-                      : "font-medium text-neutral-700"
-                  }`}
-                >
-                  {agent.name}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2
+                    className={`text-[14px] truncate ${
+                      isActive
+                        ? "font-semibold text-neutral-900"
+                        : "font-medium text-neutral-700"
+                    }`}
+                  >
+                    {agent.name}
+                  </h2>
+                  {agent.status === "coming_soon" && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-sm bg-neutral-100 text-neutral-500 border border-neutral-200">
+                      Soon
+                    </span>
+                  )}
+                </div>
                 <p className="text-[12px] text-neutral-400 truncate leading-tight">
                   {agent.description}
                 </p>
