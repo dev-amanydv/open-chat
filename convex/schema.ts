@@ -34,4 +34,28 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     lastTyped: v.number(),
   }).index("by_conversation", ["conversationId"]),
+  agentChats: defineTable({
+    userId: v.id("users"),
+    agentId: v.string(),
+    lastMessage: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_agent", ["userId", "agentId"]),
+  agentMessages: defineTable({
+    chatId: v.id("agentChats"),
+    role: v.union(v.literal("user"), v.literal("agent")),
+    content: v.string(),
+    booking: v.optional(
+      v.object({
+        title: v.string(),
+        date: v.string(),
+        time: v.string(),
+        attendeeName: v.string(),
+        attendeeEmail: v.string(),
+        uid: v.string(),
+      }),
+    ),
+    rating: v.optional(v.union(v.literal("up"), v.literal("down"))),
+  }).index("by_chat", ["chatId"]),
 });

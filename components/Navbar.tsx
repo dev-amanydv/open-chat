@@ -5,6 +5,7 @@ import { Authenticated } from "convex/react";
 import { IoChatbubbleEllipsesOutline } from "react-icons/io5";
 import { MdOutlineGroups } from "react-icons/md";
 import { FiSettings } from "react-icons/fi";
+import { TbRobot } from "react-icons/tb";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,6 +19,11 @@ export default function Navbar() {
           icon={<IoChatbubbleEllipsesOutline className="size-[22px]" />}
           href="/chats"
           active={pathname.startsWith("/chats")}
+        />
+        <NavItem
+          icon={<TbRobot className="size-[22px]" />}
+          href="/agents"
+          active={pathname.startsWith("/agents")}
         />
         <NavItem
           icon={<MdOutlineGroups className="size-[22px]" />}

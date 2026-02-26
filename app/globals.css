@@ -44,3 +44,155 @@ body {
     opacity: 0.35;
   }
 }
+
+.agent-thinking-dot {
+  animation: agentThink 1.4s ease-in-out infinite;
+}
+
+@keyframes agentThink {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.4);
+  }
+}
+
+.agent-msg-bot {
+  animation: agentMsgIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.agent-msg-user {
+  animation: userMsgIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes agentMsgIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes userMsgIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.agent-input-bar:focus-within {
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.agent-sidebar-active {
+  transition: all 0.2s ease;
+}
+
+.agent-hero-icon {
+  animation: heroPulse 3s ease-in-out infinite;
+}
+
+@keyframes heroPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.06);
+  }
+}
+
+.rating-btn {
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.rating-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.rating-btn:active {
+  transform: scale(0.9);
+}
+
+.agent-empty-entrance {
+  animation: fadeSlideUp 0.5s ease-out;
+}
+
+.agent-msg-entrance {
+  animation: fadeSlideUp 0.25s ease-out;
+}
+
+.agent-suggestions-entrance {
+  animation: fadeSlideUp 0.3s ease-out 0.1s both;
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.suggestion-chip {
+  transition: all 0.2s ease;
+}
+
+.suggestion-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-chip:active {
+  transform: scale(0.98);
+}
+
+.suggestion-chip-inline {
+  transition: all 0.15s ease;
+}
+
+.suggestion-chip-inline:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.suggestion-chip-inline:active {
+  transform: scale(0.96);
+}
+
+.booking-card {
+  animation: bookingEntrance 0.4s ease-out;
+}
+
+@keyframes bookingEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
