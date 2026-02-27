@@ -16,6 +16,30 @@ const metrics = [
   { label: "Avg action latency", value: "184ms" },
 ];
 
+const structuredData = JSON.stringify([
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Open Chat",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    creator: {
+      "@type": "Person",
+      name: "Aman Yadav",
+    },
+    description:
+      "Agent-first communication workspace for chat automation, meeting scheduling, and multi-step AI workflows.",
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: "Aman Yadav",
+    jobTitle: "Full-Stack Developer",
+    description:
+      "Creator of Open Chat, focused on building high-performance agentic communication systems.",
+  },
+]);
+
 function DrawGraphIcon() {
   return (
     <svg
@@ -85,6 +109,10 @@ export default function Home() {
 
   return (
     <div className="landing-shell landing-body">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: structuredData }}
+      />
       <div className="landing-ambient" aria-hidden="true" />
 
       <header className="landing-nav">
@@ -100,12 +128,14 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link href="/agents" className="landing-nav-link hidden md:inline-flex">
+            <div className="md:flex items-center gap-2 hidden">
+              <Link href="/agents" className="landing-nav-link hidden md:inline-flex">
               Agents
             </Link>
             <Link href="/chats" className="landing-nav-link hidden md:inline-flex">
               Product
             </Link>
+            </div>
             <SignedOut>
               <SignInButton mode="modal">
                 <button className="landing-nav-link">Sign in</button>
@@ -329,6 +359,19 @@ export default function Home() {
               View team spaces
             </Link>
           </div>
+        </section>
+
+        <section className="mt-10 rounded-3xl border border-black/10 bg-white/72 p-8 md:p-10">
+          <p className="bento-kicker">Creator</p>
+          <h3 className="landing-heading mt-2 text-3xl tracking-[-0.03em] text-zinc-900">
+            Built by Aman Yadav
+          </h3>
+          <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-600">
+            I am a full-stack developer building Open Chat to reduce manual
+            communication work through practical agent orchestration. The core
+            focus is fast interfaces, deterministic workflows, and reliable
+            automations for messaging and meeting operations.
+          </p>
         </section>
 
         <footer className="mt-10 rounded-3xl border border-black/10 bg-white/72 p-8 md:p-10">
