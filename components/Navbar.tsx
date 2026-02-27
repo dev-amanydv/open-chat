@@ -5,15 +5,16 @@ import { Authenticated } from "convex/react";
 import { IoChatbubbleEllipsesOutline } from "react-icons/io5";
 import { MdOutlineGroups } from "react-icons/md";
 import { FiSettings } from "react-icons/fi";
-import { TbRobot } from "react-icons/tb";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { ThemeToggle } from "./ThemeToggle";
 
 export default function Navbar() {
   const pathname = usePathname();
 
   return (
-    <div className="w-[68px] h-screen bg-[#F0F2F5] flex flex-col items-center py-3 flex-none border-r border-[#E0E0E0]">
+    <div className="w-[68px] h-dvh bg-zinc-50 dark:bg-zinc-900 flex flex-col items-center py-3 flex-none border-r border-zinc-200 dark:border-zinc-800 transition-colors">
       <div className="flex flex-col items-center gap-1 flex-1">
         <NavItem
           icon={<IoChatbubbleEllipsesOutline className="size-[22px]" />}
@@ -21,7 +22,7 @@ export default function Navbar() {
           active={pathname.startsWith("/chats")}
         />
         <NavItem
-          icon={<TbRobot className="size-[22px]" />}
+          icon={<Image src={"/agent.png"} width={28} height={28} alt="agent" />}
           href="/agents"
           active={pathname.startsWith("/agents")}
         />
@@ -33,6 +34,7 @@ export default function Navbar() {
       </div>
 
       <div className="flex flex-col items-center gap-1">
+        <ThemeToggle />
         <NavItem icon={<FiSettings className="size-[20px]" />} />
         <Authenticated>
           <div className="mt-2">
@@ -61,8 +63,8 @@ function NavItem({
 }) {
   const classes = `size-12 flex items-center justify-center rounded-xl transition-colors ${
     active
-      ? "bg-[#E3E8ED] text-neutral-800"
-      : "text-neutral-500 hover:bg-[#E3E8ED] hover:text-neutral-700"
+      ? "bg-white dark:bg-zinc-800 shadow-sm border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100"
+      : "text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
   }`;
 
   if (href) {

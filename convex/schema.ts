@@ -13,6 +13,9 @@ export default defineSchema({
     participants: v.array(v.string()),
     lastMessage: v.string(),
     unreadCounts: v.string(),
+    isGroup: v.optional(v.boolean()),
+    name: v.optional(v.string()),
+    admin: v.optional(v.id("users")),
   }),
   messages: defineTable({
     conversationId: v.string(),
@@ -23,11 +26,21 @@ export default defineSchema({
       v.literal("delivered"),
       v.literal("seen"),
     ),
-    deliveryInfo: v.object({
-      deliveredAt: v.string(),
-      readAt: v.string(),
-    }),
-    isDeleted: v.boolean(),
+    deliveryInfo: v.optional(
+      v.object({
+        deliveredAt: v.string(),
+        readAt: v.string(),
+      }),
+    ),
+    isDeleted: v.optional(v.boolean()),
+    reactions: v.optional(
+      v.array(
+        v.object({
+          emoji: v.string(),
+          users: v.array(v.id("users")),
+        }),
+      ),
+    ),
   }),
   typingIndicators: defineTable({
     userId: v.id("users"),

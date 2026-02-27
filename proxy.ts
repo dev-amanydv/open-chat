@@ -1,5 +1,4 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 
 const isRouteProtected = createRouteMatcher(["/chats(.*)", "/agents(.*)"]);
 
@@ -10,10 +9,6 @@ export default clerkMiddleware(async (auth, request) => {
     if (!userId) {
       await auth.protect();
     }
-  }
-
-  if (userId && request.nextUrl.pathname === "/") {
-    return NextResponse.redirect(new URL("/chats", request.url));
   }
 });
 

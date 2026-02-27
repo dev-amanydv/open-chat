@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import {
-  ClerkProvider,
-} from "@clerk/nextjs";
 import { ConvexClientProvider } from "./ConvexClientProvider";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "react-hot-toast";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -29,11 +18,17 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <ConvexClientProvider>
-        <html lang="en">
-          <body
-            className={`${geistSans.variable} ${geistMono.variable} flex antialiased`}
-          >
-            {children}
+        <html lang="en" suppressHydrationWarning>
+          <body className="antialiased">
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="light"
+              enableSystem={false}
+              disableTransitionOnChange
+            >
+              {children}
+              <Toaster position="top-center" />
+            </ThemeProvider>
           </body>
         </html>
       </ConvexClientProvider>

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getLLMModel, getOpenAIClient } from "@/lib/openai";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   "meeting-mind": `You are MeetingMind, an elite scheduling assistant embedded within this platform. Your sole purpose is to make sure the right people are in the right place at the right time — with zero friction for the user.
+You only schedule meetings with Aman Yadav (the developer of this website).
 
 TODAY: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
 
@@ -18,6 +20,8 @@ You have TWO actions you can trigger by outputting EXACTLY ONE of these JSON obj
    {"action":"list_slots","date":"YYYY-MM-DD"}
 
 RULES:
+- Always make it clear that MeetingMind books meetings with Aman Yadav only.
+- If a user asks to schedule with someone else, clarify that this assistant can only book with Aman Yadav, then continue helping with Aman availability.
 - If the user provides a date AND time → output the check_availability JSON. Nothing else.
 - If the user provides only a date, or asks "what slots are available", "show me times" etc → output the list_slots JSON. Nothing else.
 - If the user says "today", "tomorrow", "this Monday", etc., calculate the actual YYYY-MM-DD date from today's date above.
@@ -55,6 +59,10 @@ You have these actions you can trigger by outputting EXACTLY ONE JSON object (no
 5. TRACK UNREPLIED (find conversations waiting for a reply):
    {"action":"track_unreplied"}
 
+6. GET RECENT MESSAGES (show latest messages across chats):
+   {"action":"get_recent_messages","query":"10"}
+   - query should be a number as string (default "10")
+
 RULES:
 - When the user asks to see their conversations, who they talked to, etc → output get_conversations JSON.
 - When the user asks to find/search a message or asks "what did X say about Y" → output search_messages JSON with relevant query.
@@ -65,6 +73,7 @@ RULES:
   "[Message content]"
   Say "confirm" to send or tell me to edit.
 - When the user asks "who hasn't replied", "any pending replies" → output track_unreplied JSON.
+- When the user asks for "last N messages", "recent messages", or "latest messages" → output get_recent_messages JSON.
 - When NOT outputting JSON, be warm and concise (1-3 sentences).
 - NEVER wrap JSON in markdown code blocks. Output ONLY the raw JSON object when triggering an action.
 
@@ -129,12 +138,117 @@ interface ChatMessage {
   content: string;
 }
 
-export async function POST(request: NextRequest) {
-  const apiKey = process.env.GEMINI_API_KEY;
+type ChatMindAction =
+  | { action: "get_conversations" }
+  | { action: "search_messages"; query: string }
+  | { action: "summarize_conversation"; with: string }
+  | { action: "send_message"; to: string; content: string }
+  | { action: "track_unreplied" }
+  | { action: "get_recent_messages"; query: string };
 
-  if (!apiKey) {
+const ACTION_NAMES = new Set([
+  "get_conversations",
+  "search_messages",
+  "summarize_conversation",
+  "send_message",
+  "track_unreplied",
+  "get_recent_messages",
+  "check_availability",
+  "list_slots",
+  "delegate",
+]);
+
+function inferChatMindAction(message: string): ChatMindAction | null {
+  const text = message.trim().toLowerCase();
+  if (!text) return null;
+
+  if (
+    /(unreplied|pending repl|who hasn't replied|who hasnt replied|no reply|not replied)/.test(
+      text,
+    )
+  ) {
+    return { action: "track_unreplied" };
+  }
+
+  const lastNMatch = text.match(
+    /(?:last|latest|recent)\s+(\d{1,2})\s+(?:message|messages)\b/,
+  );
+  if (lastNMatch) {
+    return { action: "get_recent_messages", query: lastNMatch[1] };
+  }
+
+  if (/(recent|latest|last)\s+(?:message|messages)\b/.test(text)) {
+    return { action: "get_recent_messages", query: "10" };
+  }
+
+  if (
+    /(recent conversations|my conversations|show conversations|who did i chat|who i talked|last conversations)/.test(
+      text,
+    )
+  ) {
+    return { action: "get_conversations" };
+  }
+
+  const summarizeWithMatch = text.match(
+    /summari[sz](?:e|ing).*(?:with|for)\s+([a-z0-9 .@_-]+)/i,
+  );
+  if (summarizeWithMatch?.[1]) {
+    return { action: "summarize_conversation", with: summarizeWithMatch[1].trim() };
+  }
+
+  const searchAboutMatch = text.match(
+    /(?:search|find|look up|lookup).*(?:about|for)\s+(.+)/i,
+  );
+  if (searchAboutMatch?.[1]) {
+    return { action: "search_messages", query: searchAboutMatch[1].trim() };
+  }
+
+  const whatDidSayMatch = text.match(/what did .* say about (.+)/i);
+  if (whatDidSayMatch?.[1]) {
+    return { action: "search_messages", query: whatDidSayMatch[1].trim() };
+  }
+
+  return null;
+}
+
+function extractActionPayload(reply: string): Record<string, string> | null {
+  const trimmed = reply.trim();
+  const candidates: string[] = [];
+
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    candidates.push(trimmed);
+  }
+
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (codeBlockMatch?.[1]) {
+    candidates.push(codeBlockMatch[1].trim());
+  }
+
+  const inlineMatch = reply.match(/\{[^{}]*"action"\s*:\s*"[^"]+"[^{}]*\}/);
+  if (inlineMatch?.[0]) {
+    candidates.push(inlineMatch[0]);
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, string>;
+      if (typeof parsed.action === "string" && ACTION_NAMES.has(parsed.action)) {
+        return parsed;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    getOpenAIClient();
+  } catch {
     return NextResponse.json(
-      { error: "Gemini API key not configured" },
+      { error: "OpenRouter API key not configured" },
       { status: 500 },
     );
   }
@@ -146,55 +260,55 @@ export async function POST(request: NextRequest) {
       messages: ChatMessage[];
     };
 
+    const lastUserMessage =
+      [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+
+    if (agentId === "chat-mind") {
+      const deterministicAction = inferChatMindAction(lastUserMessage);
+      if (deterministicAction) {
+        return NextResponse.json({ reply: JSON.stringify(deterministicAction) });
+      }
+    }
+
     const systemPrompt = SYSTEM_PROMPTS[agentId];
     if (!systemPrompt) {
       return NextResponse.json({ error: "Unknown agent" }, { status: 400 });
     }
 
-    const geminiMessages = messages.map((msg: ChatMessage) => ({
-      role: msg.role === "user" ? "user" : "model",
-      parts: [{ text: msg.content }],
-    }));
+    const client = getOpenAIClient();
+    const completion = await client.chat.completions.create({
+      model: getLLMModel(),
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages.map((msg) => ({
+          role: msg.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: msg.content,
+        })),
+      ],
+      temperature: 0.7,
+      top_p: 0.9,
+      max_tokens: 1024,
+    });
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: systemPrompt }],
-          },
-          contents: geminiMessages,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 1024,
-            topP: 0.9,
-          },
-        }),
-      },
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      console.error("Gemini error:", JSON.stringify(data));
-      return NextResponse.json(
-        { error: data.error?.message ?? "Gemini API error" },
-        { status: res.status },
-      );
-    }
-
-    const reply =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ??
+    const rawReply =
+      completion.choices[0]?.message?.content?.trim() ??
       "I'm sorry, I couldn't generate a response.";
+    const actionPayload = extractActionPayload(rawReply);
+    const reply = actionPayload ? JSON.stringify(actionPayload) : rawReply;
 
     return NextResponse.json({ reply });
   } catch (err) {
-    console.error("Chat API error:", err);
+    const status =
+      typeof (err as { status?: number }).status === "number"
+        ? (err as { status: number }).status
+        : 500;
+    const message =
+      err instanceof Error ? err.message : "OpenRouter API request failed";
+
+    console.error("LLM chat error:", err);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+      { error: message },
+      { status },
     );
   }
 }
