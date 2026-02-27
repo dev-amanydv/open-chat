@@ -18,11 +18,27 @@ export default function AgentsLayout({
   const updateLastSeen = useMutation(api.user.updateLastSeen);
 
   useEffect(() => {
-    updateLastSeen();
-    const interval = setInterval(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
       updateLastSeen();
-    }, 5000);
-    return () => clearInterval(interval);
+    };
+
+    tick();
+    const interval = setInterval(() => {
+      tick();
+    }, 60_000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateLastSeen();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [updateLastSeen]);
 
   return (

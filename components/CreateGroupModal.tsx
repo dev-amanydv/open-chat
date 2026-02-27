@@ -16,9 +16,9 @@ export default function CreateGroupModal({
   const [groupName, setGroupName] = useState("");
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
 
-  const users = useQuery(api.user.getAllUsers);
+  const users = useQuery(api.user.getAllUsers, isOpen ? {} : "skip");
   const createGroup = useMutation(api.chats.createGroup);
-  const currentUser = useQuery(api.chats.getCurrentUser);
+  const currentUser = useQuery(api.chats.getCurrentUser, isOpen ? {} : "skip");
 
   if (!isOpen) return null;
 

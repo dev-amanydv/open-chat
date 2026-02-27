@@ -30,7 +30,7 @@ const SCROLL_BOTTOM_THRESHOLD = 96;
 const STARTER_SUGGESTIONS: Record<string, string[]> = {
   "meeting-mind": [
     "Show Aman's available slots for tomorrow",
-    "Book a meeting with Aman at 3 PM",
+    "Book a meeting tomorrow with Aman at 2 PM",
     "What times is Aman free next week?",
     "Schedule a quick call with Aman",
   ],

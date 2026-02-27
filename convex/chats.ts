@@ -1,6 +1,30 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
+
+function buildDirectKey(userA: string, userB: string) {
+  return [userA, userB].sort().join("::");
+}
+
+function parseUnreadCounts(
+  raw: string | undefined,
+  participants: string[],
+): Record<string, number> {
+  let parsed: Record<string, number> = {};
+  try {
+    parsed = raw ? JSON.parse(raw) : {};
+  } catch {
+    parsed = {};
+  }
+
+  for (const participant of participants) {
+    if (typeof parsed[participant] !== "number") {
+      parsed[participant] = 0;
+    }
+  }
+
+  return parsed;
+}
 
 export const getMessages = query({
   args: {},
@@ -40,25 +64,21 @@ export const getConversationsForCurrentUser = query({
         !convo.isGroup && convo.participants.length === 2
           ? convo.participants.find((p) => p !== currentUser._id)
           : undefined;
-      const messages = await ctx.db
-        .query("messages")
-        .filter((q) => q.eq(q.field("conversationId"), convo._id))
-        .collect();
-      messages.sort((a, b) => a._creationTime - b._creationTime);
-      const unreadCount = messages.filter(
-        (m) => m.sender !== currentUser._id && m.status !== "seen",
-      ).length;
-      const lastMsg =
-        messages.length > 0 ? messages[messages.length - 1] : null;
+
+      const unreadCounts = parseUnreadCounts(
+        convo.unreadCounts,
+        convo.participants,
+      );
+      const unreadCount = unreadCounts[currentUser._id] ?? 0;
+
       results.push({
         otherUserId,
         conversationId: convo._id,
-        lastMessage: lastMsg?.content ?? convo.lastMessage,
-        lastMessageTime: lastMsg?._creationTime ?? convo._creationTime,
-        unreadCounts: convo.unreadCounts,
+        lastMessage: convo.lastMessage,
+        lastMessageTime: convo.lastMessageTime ?? convo._creationTime,
         unreadCount,
-        lastMessageSentByMe: lastMsg?.sender === currentUser._id,
-        lastMessageStatus: lastMsg?.status ?? null,
+        lastMessageSentByMe: convo.lastMessageSender === currentUser._id,
+        lastMessageStatus: convo.lastMessageStatus ?? null,
         isGroup: convo.isGroup,
         name: convo.name,
         admin: convo.admin,
@@ -84,6 +104,14 @@ export const getOrCreateConversation = mutation({
       .unique();
     if (!currentUser) throw new Error("User not found");
 
+    const directKey = buildDirectKey(currentUser._id, args.otherUserId);
+
+    const existingByKey = await ctx.db
+      .query("conversations")
+      .withIndex("by_direct_key", (q) => q.eq("directKey", directKey))
+      .unique();
+    if (existingByKey && !existingByKey.isGroup) return existingByKey._id;
+
     const allConversations = await ctx.db.query("conversations").collect();
     const existing = allConversations.find(
       (c) =>
@@ -93,11 +121,19 @@ export const getOrCreateConversation = mutation({
         c.participants.includes(args.otherUserId),
     );
 
-    if (existing) return existing._id;
+    if (existing) {
+      if (!existing.directKey) {
+        await ctx.db.patch(existing._id, { directKey });
+      }
+      return existing._id;
+    }
 
     return await ctx.db.insert("conversations", {
       participants: [currentUser._id, args.otherUserId],
       lastMessage: "",
+      lastMessageTime: Date.now(),
+      lastMessageStatus: "seen",
+      directKey,
       unreadCounts: JSON.stringify({
         [currentUser._id]: 0,
         [args.otherUserId]: 0,
@@ -107,16 +143,42 @@ export const getOrCreateConversation = mutation({
 });
 
 export const getMessagesByConversation = query({
-  args: { conversationId: v.id("conversations") },
+  args: {
+    conversationId: v.id("conversations"),
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
+    const convo = await ctx.db.get(args.conversationId);
+    if (!convo) return [];
+
+    const limit = Math.min(Math.max(args.limit ?? 150, 20), 300);
     const messages = await ctx.db
       .query("messages")
-      .filter((q) => q.eq(q.field("conversationId"), args.conversationId))
-      .collect();
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId),
+      )
+      .order("desc")
+      .take(limit);
+    messages.reverse();
+
+    const participantIds = new Set<Id<"users">>(
+      convo.participants.map((id) => id as Id<"users">),
+    );
+    const participants = await Promise.all(
+      Array.from(participantIds).map(async (id) => {
+        const user = await ctx.db.get(id);
+        return user ? ({ id, user } as const) : null;
+      }),
+    );
+    const usersById = new Map<Id<"users">, Doc<"users">>();
+    for (const participant of participants) {
+      if (!participant) continue;
+      usersById.set(participant.id, participant.user);
+    }
 
     return Promise.all(
       messages.map(async (msg) => {
-        const senderUser = await ctx.db.get(msg.sender as Id<"users">);
+        const senderUser = usersById.get(msg.sender as Id<"users">);
         return {
           ...msg,
           senderName: senderUser?.name ?? "Unknown",
@@ -144,6 +206,9 @@ export const sendMessage = mutation({
       .unique();
     if (!currentUser) throw new Error("User not found");
 
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) throw new Error("Conversation not found");
+
     await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       sender: currentUser._id,
@@ -156,8 +221,24 @@ export const sendMessage = mutation({
       isDeleted: false,
     });
 
+    const unreadCounts = parseUnreadCounts(
+      conversation.unreadCounts,
+      conversation.participants,
+    );
+    for (const participant of conversation.participants) {
+      if (participant === currentUser._id) {
+        unreadCounts[participant] = 0;
+      } else {
+        unreadCounts[participant] = (unreadCounts[participant] ?? 0) + 1;
+      }
+    }
+
     await ctx.db.patch(args.conversationId, {
       lastMessage: args.content,
+      lastMessageTime: Date.now(),
+      lastMessageSender: currentUser._id,
+      lastMessageStatus: "sent",
+      unreadCounts: JSON.stringify(unreadCounts),
     });
   },
 });
@@ -183,6 +264,13 @@ export const getConversationByUsers = query({
       .unique();
     if (!currentUser) return null;
 
+    const directKey = buildDirectKey(currentUser._id, args.otherUserId);
+    const existingByKey = await ctx.db
+      .query("conversations")
+      .withIndex("by_direct_key", (q) => q.eq("directKey", directKey))
+      .unique();
+    if (existingByKey && !existingByKey.isGroup) return existingByKey;
+
     const allConversations = await ctx.db.query("conversations").collect();
     const existing = allConversations.find(
       (c) =>
@@ -202,12 +290,20 @@ export const getCurrentUser = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    return await ctx.db
+    const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) =>
         q.eq("tokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
+    if (!user) return null;
+
+    return {
+      _id: user._id,
+      name: user.name,
+      imageUrl: user.imageUrl,
+      lastSeen: user.lastSeen,
+    };
   },
 });
 
@@ -225,27 +321,56 @@ export const markAsSeen = mutation({
       .unique();
     if (!currentUser) return;
 
-    const messages = await ctx.db
-      .query("messages")
-      .filter((q) => q.eq(q.field("conversationId"), args.conversationId))
-      .collect();
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) return;
 
-    const unread = messages.filter(
-      (m) =>
-        m.sender !== currentUser._id &&
-        (m.status === "sent" || m.status === "delivered"),
+    const [sentUnread, deliveredUnread] = await Promise.all([
+      ctx.db
+        .query("messages")
+        .withIndex("by_conversation_status", (q) =>
+          q.eq("conversationId", args.conversationId).eq("status", "sent"),
+        )
+        .collect(),
+      ctx.db
+        .query("messages")
+        .withIndex("by_conversation_status", (q) =>
+          q.eq("conversationId", args.conversationId).eq("status", "delivered"),
+        )
+        .collect(),
+    ]);
+
+    const unread = [...sentUnread, ...deliveredUnread].filter(
+      (m) => m.sender !== currentUser._id,
     );
+
+    if (unread.length === 0) return;
+
+    const now = new Date().toISOString();
 
     for (const msg of unread) {
       await ctx.db.patch(msg._id, {
         status: "seen",
         deliveryInfo: {
-          deliveredAt:
-            msg.deliveryInfo?.deliveredAt || new Date().toISOString(),
-          readAt: new Date().toISOString(),
+          deliveredAt: msg.deliveryInfo?.deliveredAt || now,
+          readAt: now,
         },
       });
     }
+
+    const unreadCounts = parseUnreadCounts(
+      conversation.unreadCounts,
+      conversation.participants,
+    );
+    unreadCounts[currentUser._id] = 0;
+
+    const conversationPatch: Record<string, unknown> = {
+      unreadCounts: JSON.stringify(unreadCounts),
+    };
+    if (conversation.lastMessageSender !== currentUser._id) {
+      conversationPatch.lastMessageStatus = "seen";
+    }
+
+    await ctx.db.patch(args.conversationId, conversationPatch);
   },
 });
 
@@ -271,18 +396,21 @@ export const markAllAsDelivered = mutation({
     for (const convo of myConversations) {
       const messages = await ctx.db
         .query("messages")
-        .filter((q) => q.eq(q.field("conversationId"), convo._id))
+        .withIndex("by_conversation_status", (q) =>
+          q.eq("conversationId", convo._id).eq("status", "sent"),
+        )
         .collect();
 
       const undelivered = messages.filter(
         (m) => m.sender !== currentUser._id && m.status === "sent",
       );
 
+      const now = new Date().toISOString();
       for (const msg of undelivered) {
         await ctx.db.patch(msg._id, {
           status: "delivered",
           deliveryInfo: {
-            deliveredAt: new Date().toISOString(),
+            deliveredAt: now,
             readAt: "",
           },
         });
@@ -396,6 +524,8 @@ export const createGroup = mutation({
       name: args.name,
       admin: currentUser._id,
       lastMessage: "",
+      lastMessageTime: Date.now(),
+      lastMessageStatus: "seen",
       unreadCounts: JSON.stringify(unreadCounts),
     });
   },
@@ -455,6 +585,13 @@ export const resolveConversationId = query({
         )
         .unique();
       if (!currentUser) return null;
+
+      const directKey = buildDirectKey(currentUser._id, userId);
+      const existingByKey = await ctx.db
+        .query("conversations")
+        .withIndex("by_direct_key", (q) => q.eq("directKey", directKey))
+        .unique();
+      if (existingByKey && !existingByKey.isGroup) return existingByKey._id;
 
       const allConvos = await ctx.db.query("conversations").collect();
       const existing = allConvos.find(

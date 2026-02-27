@@ -40,9 +40,14 @@ export const getAllUsers = query({
       return [];
     }
     const allUsers = await ctx.db.query("users").collect();
-    return allUsers.filter(
-      (user) => user.tokenIdentifier !== identity.tokenIdentifier,
-    );
+    return allUsers
+      .filter((user) => user.tokenIdentifier !== identity.tokenIdentifier)
+      .map((user) => ({
+        _id: user._id,
+        name: user.name,
+        imageUrl: user.imageUrl,
+        lastSeen: user.lastSeen,
+      }));
   },
 });
 
@@ -58,7 +63,12 @@ export const updateLastSeen = mutation({
       )
       .unique();
     if (user) {
-      await ctx.db.patch(user._id, { lastSeen: Date.now() });
+      const now = Date.now();
+      const lastSeen = user.lastSeen ?? 0;
+      if (now - lastSeen < 45_000) {
+        return;
+      }
+      await ctx.db.patch(user._id, { lastSeen: now });
     }
   },
 });

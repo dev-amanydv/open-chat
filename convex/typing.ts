@@ -17,10 +17,9 @@ export const setTyping = mutation({
 
     const existing = await ctx.db
       .query("typingIndicators")
-      .withIndex("by_conversation", (q) =>
-        q.eq("conversationId", args.conversationId),
+      .withIndex("by_conversation_user", (q) =>
+        q.eq("conversationId", args.conversationId).eq("userId", currentUser._id),
       )
-      .filter((q) => q.eq(q.field("userId"), currentUser._id))
       .unique();
 
     if (existing) {
@@ -43,10 +42,9 @@ export const getTypingStatus = query({
   handler: async (ctx, args) => {
     const indicator = await ctx.db
       .query("typingIndicators")
-      .withIndex("by_conversation", (q) =>
-        q.eq("conversationId", args.conversationId),
+      .withIndex("by_conversation_user", (q) =>
+        q.eq("conversationId", args.conversationId).eq("userId", args.otherUserId),
       )
-      .filter((q) => q.eq(q.field("userId"), args.otherUserId))
       .unique();
 
     return indicator?.lastTyped ?? null;
@@ -58,13 +56,9 @@ export const getTypingForUser = query({
   handler: async (ctx, args) => {
     const indicators = await ctx.db
       .query("typingIndicators")
-      .filter((q) => q.eq(q.field("userId"), args.userId))
-      .collect();
-
-    if (indicators.length === 0) return null;
-    const latest = indicators.reduce((a, b) =>
-      a.lastTyped > b.lastTyped ? a : b,
-    );
-    return latest.lastTyped;
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(1);
+    return indicators[0]?.lastTyped ?? null;
   },
 });

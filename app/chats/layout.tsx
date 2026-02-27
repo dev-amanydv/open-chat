@@ -10,6 +10,8 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useEffect } from "react";
 import { FiChevronLeft } from "react-icons/fi";
 
+const ONLINE_WINDOW_MS = 75_000;
+
 function timeAgo(timestamp: number): string {
   const diff = Date.now() - timestamp;
   const seconds = Math.floor(diff / 1000);
@@ -43,17 +45,29 @@ export default function ChatLayout({
   );
 
   const updateLastSeen = useMutation(api.user.updateLastSeen);
-  const markAllAsDelivered = useMutation(api.chats.markAllAsDelivered);
   useEffect(() => {
-    updateLastSeen();
-    markAllAsDelivered();
-    const intervel = setInterval(() => {
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
       updateLastSeen();
-      markAllAsDelivered();
-    }, 5000);
+    };
 
-    return () => clearInterval(intervel);
-  }, [updateLastSeen, markAllAsDelivered]);
+    tick();
+    const interval = setInterval(() => {
+      tick();
+    }, 60_000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateLastSeen();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [updateLastSeen]);
 
   return (
     <main className="w-full h-dvh flex overflow-hidden">
@@ -106,7 +120,7 @@ export default function ChatLayout({
                     {!chatInfo.isGroup &&
                     chatInfo.lastSeen &&
                     // eslint-disable-next-line react-hooks/purity
-                    Date.now() - chatInfo.lastSeen < 5000 ? (
+                    Date.now() - chatInfo.lastSeen < ONLINE_WINDOW_MS ? (
                       <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
                     ) : null}
                   </div>
@@ -120,7 +134,7 @@ export default function ChatLayout({
                       </span>
                     ) : chatInfo.lastSeen &&
                       // eslint-disable-next-line react-hooks/purity
-                      Date.now() - chatInfo.lastSeen < 5000 ? (
+                      Date.now() - chatInfo.lastSeen < ONLINE_WINDOW_MS ? (
                       <span className="text-xs text-neutral-400 dark:text-neutral-500">
                         Online
                       </span>

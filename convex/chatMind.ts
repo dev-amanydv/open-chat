@@ -2,6 +2,28 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 
+function buildDirectKey(userA: string, userB: string) {
+  return [userA, userB].sort().join("::");
+}
+
+function parseUnreadCounts(
+  raw: string | undefined,
+  participants: string[],
+): Record<string, number> {
+  let parsed: Record<string, number> = {};
+  try {
+    parsed = raw ? JSON.parse(raw) : {};
+  } catch {
+    parsed = {};
+  }
+  for (const participant of participants) {
+    if (typeof parsed[participant] !== "number") {
+      parsed[participant] = 0;
+    }
+  }
+  return parsed;
+}
+
 export const executeAction = mutation({
   args: {
     action: v.string(),
@@ -138,8 +160,11 @@ export const executeAction = mutation({
         for (const [cId, data] of map) {
           const messages = await ctx.db
             .query("messages")
-            .filter((q) => q.eq(q.field("conversationId"), cId))
-            .collect();
+            .withIndex("by_conversation", (q) =>
+              q.eq("conversationId", cId),
+            )
+            .order("desc")
+            .take(200);
           for (const m of messages) {
             if (m.content.toLowerCase().includes(q)) {
               const sender =
@@ -170,25 +195,56 @@ export const executeAction = mutation({
 
         const messages = await ctx.db
           .query("messages")
-          .filter((q) => q.eq(q.field("conversationId"), convo._id))
-          .collect();
+          .withIndex("by_conversation", (q) =>
+            q.eq("conversationId", convo._id),
+          )
+          .order("desc")
+          .take(80);
+        messages.reverse();
 
         if (messages.length === 0)
           return `Your conversation with ${targetUser.name} is empty.`;
 
-        const transcript = messages
+        const recent = messages.slice(-20);
+        const last = recent[recent.length - 1];
+        const lastSender = last.sender === currentUser._id ? "You" : targetUser.name;
+        const first = recent[0];
+        const firstTime = new Date(first._creationTime).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        const lastTime = new Date(last._creationTime).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        const lastLines = recent
+          .slice(-3)
           .map((m) => {
-            const sender =
-              m.sender === currentUser._id ? "You" : targetUser.name;
-            return `${sender}: ${m.content}`;
+            const sender = m.sender === currentUser._id ? "You" : targetUser.name;
+            return `- ${sender}: "${m.content}"`;
           })
-          .slice(-20);
+          .join("\n");
 
-        return (
-          `Transcript with ${targetUser.name}:\n` +
-          transcript.join("\n") +
-          "\n\n(I have fetched the transcript. Please summarize it beautifully for the user.)"
-        );
+        const actionLine =
+          last.sender === currentUser._id
+            ? `Action needed: Waiting for ${targetUser.name} to reply.`
+            : "Action needed: No pending reply required from your side.";
+
+        return `Here is a summary of your conversation with ${targetUser.name}:
+
+- Messages reviewed: ${recent.length}
+- Time range: ${firstTime} to ${lastTime}
+- Latest message by: ${lastSender}
+- Latest message: "${last.content}"
+
+Recent context:
+${lastLines}
+
+${actionLine}`;
       }
 
       case "send_message": {
@@ -208,9 +264,14 @@ export const executeAction = mutation({
         let convoId = convo?._id;
 
         if (!convo) {
+          const directKey = buildDirectKey(currentUser._id, targetUser._id);
           convoId = await ctx.db.insert("conversations", {
             participants: [currentUser._id, targetUser._id],
             lastMessage: args.content,
+            lastMessageTime: Date.now(),
+            lastMessageSender: currentUser._id,
+            lastMessageStatus: "sent",
+            directKey,
             unreadCounts: JSON.stringify({
               [currentUser._id]: 0,
               [targetUser._id]: 1,
@@ -228,17 +289,18 @@ export const executeAction = mutation({
         });
 
         if (convo) {
-          let unreadCounts: Record<string, number> = {};
-          try {
-            unreadCounts = JSON.parse(convo.unreadCounts || "{}");
-          } catch {
-            unreadCounts = {};
-          }
+          const unreadCounts = parseUnreadCounts(
+            convo.unreadCounts,
+            convo.participants,
+          );
           unreadCounts[currentUser._id] = 0;
           unreadCounts[targetUser._id] = (unreadCounts[targetUser._id] ?? 0) + 1;
 
           await ctx.db.patch(convo._id, {
             lastMessage: args.content,
+            lastMessageTime: Date.now(),
+            lastMessageSender: currentUser._id,
+            lastMessageStatus: "sent",
             unreadCounts: JSON.stringify(unreadCounts),
           });
         }
@@ -252,8 +314,11 @@ export const executeAction = mutation({
         for (const [cId, data] of map) {
           const messages = await ctx.db
             .query("messages")
-            .filter((q) => q.eq(q.field("conversationId"), cId))
-            .collect();
+            .withIndex("by_conversation", (q) =>
+              q.eq("conversationId", cId),
+            )
+            .order("desc")
+            .take(200);
           messages.sort((a, b) => a._creationTime - b._creationTime);
           if (messages.length > 0) {
             const last = messages[messages.length - 1];
@@ -290,8 +355,11 @@ export const executeAction = mutation({
         for (const [cId, data] of map) {
           const messages = await ctx.db
             .query("messages")
-            .filter((q) => q.eq(q.field("conversationId"), cId))
-            .collect();
+            .withIndex("by_conversation", (q) =>
+              q.eq("conversationId", cId),
+            )
+            .order("desc")
+            .take(120);
 
           for (const m of messages) {
             entries.push({

@@ -12,11 +12,17 @@ export default defineSchema({
   conversations: defineTable({
     participants: v.array(v.string()),
     lastMessage: v.string(),
+    lastMessageTime: v.optional(v.number()),
+    lastMessageSender: v.optional(v.string()),
+    lastMessageStatus: v.optional(
+      v.union(v.literal("sent"), v.literal("delivered"), v.literal("seen")),
+    ),
     unreadCounts: v.string(),
+    directKey: v.optional(v.string()),
     isGroup: v.optional(v.boolean()),
     name: v.optional(v.string()),
     admin: v.optional(v.id("users")),
-  }),
+  }).index("by_direct_key", ["directKey"]),
   messages: defineTable({
     conversationId: v.string(),
     sender: v.string(),
@@ -41,12 +47,17 @@ export default defineSchema({
         }),
       ),
     ),
-  }),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_conversation_status", ["conversationId", "status"]),
   typingIndicators: defineTable({
     userId: v.id("users"),
     conversationId: v.id("conversations"),
     lastTyped: v.number(),
-  }).index("by_conversation", ["conversationId"]),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_user", ["userId"])
+    .index("by_conversation_user", ["conversationId", "userId"]),
   agentChats: defineTable({
     userId: v.id("users"),
     agentId: v.string(),

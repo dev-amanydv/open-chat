@@ -7,7 +7,6 @@ import { CiSearch } from "react-icons/ci";
 import { IoCreateOutline } from "react-icons/io5";
 import { RiCheckDoubleFill, RiCheckFill } from "react-icons/ri";
 import SidebarSkeleton from "@/components/skeletons/SidebarSkeleton";
-import { Id } from "@/convex/_generated/dataModel";
 import CreateGroupModal from "./CreateGroupModal";
 
 type DeliveryStatus = "sent" | "delivered" | "seen" | null | undefined;
@@ -46,11 +45,9 @@ function DeliveryStatusTick({
 }
 
 function UserSubtitle({
-  userId,
   convo,
   unreadCount,
 }: {
-  userId: Id<"users">;
   convo?: {
     lastMessage: string;
     lastMessageSentByMe: boolean;
@@ -58,14 +55,6 @@ function UserSubtitle({
   };
   unreadCount: number;
 }) {
-  const lastTyped = useQuery(api.typing.getTypingForUser, { userId });
-  const now = useNow();
-  const isTyping = Boolean(lastTyped && now - lastTyped < 3000);
-
-  if (isTyping) {
-    return <p className="text-[13px] font-medium text-green-500">typing...</p>;
-  }
-
   if (convo) {
     return (
       <div className="flex items-center gap-1">
@@ -92,27 +81,31 @@ function UserSubtitle({
 export default function Sidebar({
   groupsOnly = false,
 }: { groupsOnly?: boolean } = {}) {
-  const users = useQuery(api.user.getAllUsers);
+  const users = useQuery(api.user.getAllUsers, groupsOnly ? "skip" : {});
   const conversations = useQuery(api.chats.getConversationsForCurrentUser);
-  const currentUser = useQuery(api.chats.getCurrentUser);
+  const currentUser = useQuery(
+    api.chats.getCurrentUser,
+    groupsOnly ? "skip" : {},
+  );
   const syncUser = useMutation(api.user.getForCurrentUser);
   const router = useRouter();
   const params = useParams();
   const activeUserId = params?.userId as string | undefined;
   const [search, setSearch] = useState("");
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
-  const now = useNow(5000);
+  const now = useNow(15_000);
 
   useEffect(() => {
     syncUser();
   }, [syncUser]);
 
-  if (users === undefined) {
+  if (!groupsOnly && users === undefined) {
     return <SidebarSkeleton />;
   }
 
   const searchText = search.toLowerCase().trim();
-  const usersExceptCurrent = users.filter(
+  const usersList = users ?? [];
+  const usersExceptCurrent = usersList.filter(
     (user) => user._id !== currentUser?._id,
   );
   const usersById = new Map(
@@ -143,14 +136,14 @@ export default function Sidebar({
 
   const allUsers = usersExceptCurrent
     .filter((user) => user.name.toLowerCase().includes(searchText))
-    .sort((a, b) => b._creationTime - a._creationTime);
+    .sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
 
   const renderUserRow = (
     user: (typeof usersExceptCurrent)[number],
     convo?: (typeof sortedConversations)[number],
   ) => {
     const isActive = activeUserId === user._id;
-    const isOnline = user.lastSeen && now - user.lastSeen < 5000;
+    const isOnline = user.lastSeen && now - user.lastSeen < 75_000;
 
     return (
       <div
@@ -187,7 +180,6 @@ export default function Sidebar({
           </div>
           <div className="w-full flex justify-between">
             <UserSubtitle
-              userId={user._id}
               convo={convo}
               unreadCount={convo?.unreadCount ?? 0}
             />

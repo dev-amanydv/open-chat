@@ -46,7 +46,7 @@ const MessageItem = ({
   isGroup,
 }: {
   message: Doc<"messages"> & { senderName?: string; senderImage?: string };
-  currentUser: Doc<"users"> | null;
+  currentUser: { _id: Id<"users"> } | null;
   isSelected: boolean;
   selectionMode: boolean;
   onToggleSelect: () => void;
@@ -345,9 +345,15 @@ export default function ChatPage() {
   );
 
   useEffect(() => {
-    if (!activeConversationId) return;
+    if (!activeConversationId || !messages || !currentUser) return;
+    const hasUnreadIncoming = messages.some(
+      (message) =>
+        message.sender !== currentUser._id &&
+        (message.status === "sent" || message.status === "delivered"),
+    );
+    if (!hasUnreadIncoming) return;
     markAsSeen({ conversationId: activeConversationId });
-  }, [activeConversationId, messages, markAsSeen]);
+  }, [activeConversationId, currentUser, messages, markAsSeen]);
 
   const otherUserLastTyped = useQuery(
     api.typing.getTypingStatus,

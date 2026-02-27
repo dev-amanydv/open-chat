@@ -192,6 +192,7 @@ function parseDateReference(message: string): Date | null {
 
 const RECIPIENT_TRAILING_CONTEXT =
   /\s+(?:about|regarding|that|which|for|with|on|at|in|after|before|during)\b[\s\S]*$/i;
+const RECIPIENT_LEADING_CONTEXT = /^(?:about|regarding)\b[\s\S]*?\bto\s+/i;
 const RECIPIENT_PRONOUNS = new Set([
   "them",
   "him",
@@ -208,9 +209,15 @@ function cleanRecipientCandidate(raw: string): string | null {
 
   let cleaned = withoutNoise
     .replace(/^(?:the|a|an)\s+/i, "")
+    .replace(RECIPIENT_LEADING_CONTEXT, "")
     .replace(RECIPIENT_TRAILING_CONTEXT, "")
     .replace(/[.,!?;:]+$/, "")
     .trim();
+
+  if (/\b(?:about|regarding)\b/i.test(cleaned) && /\bto\b/i.test(cleaned)) {
+    const tail = cleaned.split(/\bto\b/i).pop()?.trim();
+    if (tail) cleaned = tail;
+  }
 
   if (!cleaned) return null;
   if (RECIPIENT_PRONOUNS.has(cleaned.toLowerCase())) return null;
@@ -227,6 +234,7 @@ function cleanRecipientCandidate(raw: string): string | null {
 
 function extractMessageRecipient(message: string): string | null {
   const patterns = [
+    /(?:send(?:\s+(?:a|the))?\s+(?:confirmation\s+)?message|notify|inform|tell)\b[^.!?\n]{0,160}?\bto\s+(.+?)(?=$|[.,!?]|(?:\s+(?:about|regarding|that|which|for|with|on|at|in|after|before)\b))/i,
     /send(?:\s+(?:a|the))?\s+(?:confirmation\s+)?message\s+to\s+(.+?)(?=$|[.,!?]|(?:\s+(?:about|regarding|that|which|for|with|on|at|in|after|before)\b))/i,
     /(?:notify|inform|tell)\s+(.+?)(?=$|[.,!?]|(?:\s+(?:about|regarding|that|which|for|with|on|at|in|after|before)\b))/i,
     /message\s+(.+?)(?=$|[.,!?]|(?:\s+(?:about|regarding|that|which|for|with|on|at|in|after|before)\b))/i,
