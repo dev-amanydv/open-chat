@@ -4,6 +4,8 @@ import { ConvexClientProvider } from "./ConvexClientProvider";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const siteUrl =
   process.env.NEXT_PUBLIC_APP_URL ??
@@ -69,6 +71,8 @@ export default function RootLayout({
               disableTransitionOnChange
             >
               {children}
+              <Analytics/>
+              <SpeedInsights/>
               <Toaster position="top-center" />
             </ThemeProvider>
           </body>
