@@ -114,7 +114,6 @@ function parseMasterMindDateTime(message: string): Date | null {
   if (text.includes("tomorrow")) {
     date.setDate(date.getDate() + 1);
   } else if (text.includes("today")) {
-    // Keep current date
   } else {
     const weekdayMap: Record<string, number> = {
       sunday: 0,
@@ -223,7 +222,6 @@ function cleanRecipientCandidate(raw: string): string | null {
   if (RECIPIENT_PRONOUNS.has(cleaned.toLowerCase())) return null;
   if (!/[a-z]/i.test(cleaned)) return null;
 
-  // Defensive cap so we don't pass full clauses as a "recipient".
   const words = cleaned.split(/\s+/);
   if (words.length > 5) {
     cleaned = words.slice(0, 5).join(" ");

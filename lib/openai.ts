@@ -1,25 +1,27 @@
-import OpenAI from "openai";
+import { AzureOpenAI } from "openai";
 
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = "arcee-ai/trinity-large-preview:free";
+const DEFAULT_API_VERSION = "2025-04-01-preview";
+const DEFAULT_DEPLOYMENT = "gpt-5-mini";
 
 export function getOpenAIClient() {
-  const apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY;
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+
   if (!apiKey) {
-    throw new Error("OpenRouter API key not configured");
+    throw new Error("Azure OpenAI API key not configured");
+  }
+  if (!endpoint) {
+    throw new Error("Azure OpenAI endpoint not configured");
   }
 
-  return new OpenAI({
+  return new AzureOpenAI({
     apiKey,
-    baseURL: process.env.OPENAI_BASE_URL ?? OPENROUTER_BASE_URL,
-    defaultHeaders: {
-      "HTTP-Referer":
-        process.env.OPENROUTER_SITE_URL ?? "http://localhost:3000",
-      "X-Title": "open-chat",
-    },
+    endpoint,
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? DEFAULT_API_VERSION,
+    deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? DEFAULT_DEPLOYMENT,
   });
 }
 
 export function getLLMModel() {
-  return process.env.OPENAI_MODEL ?? DEFAULT_MODEL;
+  return process.env.AZURE_OPENAI_DEPLOYMENT ?? DEFAULT_DEPLOYMENT;
 }
