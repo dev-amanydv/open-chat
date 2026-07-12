@@ -14,7 +14,6 @@ export function getModel() {
 export const AGENT_PROVIDER_OPTIONS = {
   openai: {
     reasoningEffort: "low",
-    reasoningSummary: "auto",
     store: false,
   },
 } as const;

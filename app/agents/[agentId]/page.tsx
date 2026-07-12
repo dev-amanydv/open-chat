@@ -312,13 +312,6 @@ function messageText(message: UIMessage): string {
     .join("");
 }
 
-function messageReasoning(message: UIMessage): string {
-  return message.parts
-    .filter((p) => p.type === "reasoning")
-    .map((p) => (p as { text: string }).text)
-    .join("\n");
-}
-
 function messageBooking(message: UIMessage): BookingDetails | undefined {
   for (const part of message.parts) {
     if (
@@ -335,7 +328,7 @@ function messageBooking(message: UIMessage): BookingDetails | undefined {
 
 function persistableParts(message: UIMessage) {
   return message.parts.filter(
-    (p) => p.type === "text" || p.type === "reasoning" || isToolUIPart(p),
+    (p) => p.type === "text" || isToolUIPart(p),
   );
 }
 
@@ -770,7 +763,6 @@ function AgentChat({
           {messages.map((msg, idx) => {
             const isUser = msg.role === "user";
             const text = messageText(msg);
-            const reasoning = isUser ? "" : messageReasoning(msg);
             const allToolParts = (
               isUser ? [] : msg.parts.filter(isToolUIPart)
             ) as AnyToolPart[];
@@ -809,18 +801,8 @@ function AgentChat({
                 <div className="max-w-[78%]">
                   {planSteps && <PlanCard steps={planSteps} />}
 
-                  {!isUser && (reasoning || chipParts.length > 0) && (
+                  {!isUser && chipParts.length > 0 && (
                     <div className="mb-1.5 space-y-1.5">
-                      {reasoning && (
-                        <details className="group">
-                          <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.12em] font-mono text-ink-faint hover:text-ink-muted select-none flex items-center gap-1.5">
-                            <HiSparkles className="size-3" /> Reasoning
-                          </summary>
-                          <p className="mt-1.5 text-[12px] leading-relaxed whitespace-pre-wrap text-ink-muted border-l-2 border-line-strong pl-3">
-                            {reasoning}
-                          </p>
-                        </details>
-                      )}
                       {chipParts.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-[10px] uppercase tracking-[0.12em] font-mono text-ink-faint">
