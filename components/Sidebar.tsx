@@ -1,13 +1,15 @@
 "use client";
 import { api } from "@/convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, usePathname } from "next/navigation";
 import { CiSearch } from "react-icons/ci";
-import { IoCreateOutline } from "react-icons/io5";
 import { RiCheckDoubleFill, RiCheckFill } from "react-icons/ri";
+import { HiOutlineSparkles } from "react-icons/hi2";
 import SidebarSkeleton from "@/components/skeletons/SidebarSkeleton";
-import CreateGroupModal from "./CreateGroupModal";
+import SemanticSearchModal from "./SemanticSearchModal";
+import Avatar from "./Avatar";
+import { primaryAgent } from "@/lib/agents";
 
 type DeliveryStatus = "sent" | "delivered" | "seen" | null | undefined;
 
@@ -34,12 +36,12 @@ function DeliveryStatusTick({
   if (!isMyMessage || !status) return null;
 
   if (status === "sent") {
-    return <RiCheckFill className="text-neutral-400 flex-none" />;
+    return <RiCheckFill className="text-ink-faint flex-none" />;
   }
 
   return (
     <RiCheckDoubleFill
-      className={`${status === "seen" ? "text-blue-400 dark:text-blue-500" : "text-neutral-400 dark:text-neutral-500"} flex-none`}
+      className={`${status === "seen" ? "text-accent" : "text-ink-faint"} flex-none`}
     />
   );
 }
@@ -63,7 +65,7 @@ function UserSubtitle({
           status={convo.lastMessageStatus}
         />
         <p
-          className={`text-[13px] truncate ${unreadCount > 0 ? "font-semibold text-neutral-800 dark:text-neutral-200" : "text-neutral-500 dark:text-neutral-400"}`}
+          className={`text-[13px] truncate ${unreadCount > 0 ? "font-semibold text-ink" : "text-ink-muted"}`}
         >
           {convo.lastMessage}
         </p>
@@ -72,34 +74,90 @@ function UserSubtitle({
   }
 
   return (
-    <p className="text-neutral-400 dark:text-neutral-500 text-[13px] italic">
+    <p className="text-ink-faint text-[13px] italic">
       Tap to start conversation
     </p>
   );
 }
 
-export default function Sidebar({
-  groupsOnly = false,
-}: { groupsOnly?: boolean } = {}) {
-  const users = useQuery(api.user.getAllUsers, groupsOnly ? "skip" : {});
-  const conversations = useQuery(api.chats.getConversationsForCurrentUser);
-  const currentUser = useQuery(
-    api.chats.getCurrentUser,
-    groupsOnly ? "skip" : {},
+function AssistantRow({
+  active,
+  onClick,
+}: {
+  active: boolean;
+  onClick: () => void;
+}) {
+  const Icon = primaryAgent.icon;
+  return (
+    <button
+      onClick={onClick}
+      data-active={active ? "true" : "false"}
+      className="oc-row w-full text-left py-2.5 px-2.5 flex gap-3 items-center cursor-pointer"
+    >
+      <div
+        className="oc-glow relative size-11 rounded-2xl flex items-center justify-center flex-none border"
+        style={{
+          color: primaryAgent.color,
+          backgroundColor: `color-mix(in srgb, ${primaryAgent.color} 14%, transparent)`,
+          borderColor: `color-mix(in srgb, ${primaryAgent.color} 28%, transparent)`,
+        }}
+      >
+        <Icon className="size-[20px]" />
+      </div>
+      <div className="w-full min-w-0 flex flex-col flex-1">
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-[14px] font-semibold text-ink truncate">
+            {primaryAgent.name}
+          </h1>
+          <span className="text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-accent-soft text-accent font-mono">
+            AI
+          </span>
+        </div>
+        <p className="text-[12px] text-ink-faint truncate">
+          Your AI chief of staff · ⌘J
+        </p>
+      </div>
+    </button>
   );
+}
+
+export default function Sidebar() {
+  const users = useQuery(api.user.getAllUsers, {});
+  const conversations = useQuery(api.chats.getConversationsForCurrentUser);
+  const currentUser = useQuery(api.chats.getCurrentUser, {});
   const syncUser = useMutation(api.user.getForCurrentUser);
+  const { isAuthenticated } = useConvexAuth();
   const router = useRouter();
   const params = useParams();
+  const pathname = usePathname();
   const activeUserId = params?.userId as string | undefined;
+  const agentActive = pathname?.startsWith("/agents") ?? false;
   const [search, setSearch] = useState("");
-  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isSemanticOpen, setIsSemanticOpen] = useState(false);
   const now = useNow(15_000);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     syncUser();
-  }, [syncUser]);
+  }, [isAuthenticated, syncUser]);
 
-  if (!groupsOnly && users === undefined) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsSemanticOpen((prev) => !prev);
+      }
+      if (mod && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        router.push(`/agents/${primaryAgent.id}`);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
+
+  if (users === undefined) {
     return <SidebarSkeleton />;
   }
 
@@ -113,21 +171,13 @@ export default function Sidebar({
   );
   const sortedConversations = conversations ?? [];
   const filteredChats = sortedConversations.filter((convo) => {
-    const lastMessage = convo.lastMessage?.toLowerCase() ?? "";
-
-    if (convo.isGroup) {
-      if (!searchText) return true;
-      const groupName = convo.name?.toLowerCase() ?? "";
-      return groupName.includes(searchText) || lastMessage.includes(searchText);
-    }
-
-    if (groupsOnly) return false;
-
+    if (convo.isGroup) return false;
     if (!convo.otherUserId) return false;
     const user = usersById.get(String(convo.otherUserId));
     if (!user) return false;
 
     if (!searchText) return true;
+    const lastMessage = convo.lastMessage?.toLowerCase() ?? "";
     return (
       user.name.toLowerCase().includes(searchText) ||
       lastMessage.includes(searchText)
@@ -149,157 +199,108 @@ export default function Sidebar({
       <div
         key={user._id}
         onClick={() => router.push(`/chats/${user._id}`)}
-        className={`py-3 px-2 flex gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 rounded-md cursor-pointer ${isActive ? "bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700" : "border border-transparent"}`}
+        data-active={isActive ? "true" : "false"}
+        className="oc-row py-2.5 px-2.5 flex gap-3 cursor-pointer items-center"
       >
-        <div className="size-10 relative rounded-full border border-neutral-400 dark:border-zinc-700 bg-neutral-200 dark:bg-zinc-800 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-300 overflow-hidden">
-          {user.imageUrl ? (
-            <img
-              src={user.imageUrl}
-              alt={user.name}
-              className="size-full object-cover"
-            />
-          ) : (
-            user.name.charAt(0).toUpperCase()
-          )}
-          {isOnline && (
-            <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
-          )}
-        </div>
-        <div className="w-full pr-3 flex flex-col flex-1">
-          <div className="flex justify-between items-center">
+        <Avatar
+          name={user.name}
+          imageUrl={user.imageUrl}
+          online={Boolean(isOnline)}
+        />
+        <div className="w-full min-w-0 flex flex-col flex-1">
+          <div className="flex justify-between items-center gap-2">
             <h1
-              className={`text-[14px] ${convo && convo.unreadCount > 0 ? "font-bold" : "font-semibold"}`}
+              className={`text-[14px] truncate text-ink ${convo && convo.unreadCount > 0 ? "font-bold" : "font-semibold"}`}
             >
               {user.name}
             </h1>
             {convo && convo.unreadCount > 0 && (
-              <span className="bg-green-500 text-white text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+              <span className="bg-accent text-accent-ink text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5 flex-none font-mono-num">
                 {convo.unreadCount}
               </span>
             )}
           </div>
-          <div className="w-full flex justify-between">
-            <UserSubtitle
-              convo={convo}
-              unreadCount={convo?.unreadCount ?? 0}
-            />
+          <div className="w-full flex justify-between min-w-0">
+            <UserSubtitle convo={convo} unreadCount={convo?.unreadCount ?? 0} />
           </div>
         </div>
       </div>
     );
   };
 
-  const renderChatRow = (chat: (typeof filteredChats)[number]) => {
-    if (chat.isGroup) {
-      const isActive = activeUserId === chat.conversationId;
-
-      return (
-        <div
-          key={chat.conversationId}
-          onClick={() =>
-            router.push(
-              `${groupsOnly ? "/groups" : "/chats"}/${chat.conversationId}`,
-            )
-          }
-          className={`py-3 px-2 flex gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 rounded-md cursor-pointer ${isActive ? "bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700" : "border border-transparent"}`}
-        >
-          <div className="size-10 relative rounded-full border border-neutral-400 dark:border-zinc-700 bg-neutral-200 dark:bg-zinc-800 flex items-center justify-center text-sm font-semibold text-neutral-600 dark:text-neutral-300 overflow-hidden">
-            {chat.name?.charAt(0).toUpperCase() || "G"}
-          </div>
-          <div className="w-full pr-3 flex flex-col flex-1">
-            <div className="flex justify-between items-center">
-              <h1
-                className={`text-[14px] ${chat.unreadCount > 0 ? "font-bold" : "font-semibold"}`}
-              >
-                {chat.name || "Unnamed Group"}
-              </h1>
-              {chat.unreadCount > 0 && (
-                <span className="bg-green-500 text-white text-[11px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
-                  {chat.unreadCount}
-                </span>
-              )}
-            </div>
-            <div className="w-full flex justify-between">
-              <div className="flex items-center gap-1">
-                <DeliveryStatusTick
-                  isMyMessage={chat.lastMessageSentByMe}
-                  status={chat.lastMessageStatus}
-                />
-                <p
-                  className={`text-[13px] truncate ${chat.unreadCount > 0 ? "font-semibold text-neutral-800 dark:text-neutral-200" : "text-neutral-500 dark:text-neutral-400"}`}
-                >
-                  {chat.lastMessage || `${chat.participants.length} members`}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    const user = chat.otherUserId
-      ? usersById.get(String(chat.otherUserId))
-      : undefined;
-    if (!user) return null;
-    return renderUserRow(user, chat);
-  };
-
   return (
-    <div className="md:max-w-xs px-0 h-dvh flex flex-col w-full border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0a0a0a]">
-      <div className="flex px-2 flex-none py-4 justify-between items-center">
-        <h1 className="text-xl font-bold">{groupsOnly ? "Groups" : "Chats"}</h1>
+    <div className="md:max-w-xs px-2.5 h-dvh flex flex-col w-full border-r border-line bg-surface-1">
+      <div className="flex flex-none pt-5 pb-3 px-1.5 justify-between items-center">
+        <h1 className="text-[19px] font-bold tracking-tight text-ink">Chats</h1>
         <button
-          onClick={() => setIsGroupModalOpen(true)}
-          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400 transition-colors"
-          title="Create Group"
+          onClick={() => setIsSemanticOpen(true)}
+          className="oc-icon-btn oc-focus size-9"
+          title="Semantic search (⌘K)"
         >
-          <IoCreateOutline className="size-5" />
+          <HiOutlineSparkles className="size-[18px]" />
         </button>
       </div>
-      <div className="flex px-2 flex-none items-center relative">
+      <div className="flex flex-none items-center relative px-0.5">
+        <CiSearch className="absolute left-3 text-ink-faint size-[18px]" />
         <input
           onChange={(e) => setSearch(e.target.value)}
-          className="border w-full rounded-md pl-7 text-sm py-1 focus:outline-0 border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/50 focus:bg-white dark:focus:bg-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-700 transition-colors placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+          className="oc-input oc-focus w-full pl-9 pr-3 text-[13px] py-2.5"
           type="text"
-          placeholder="Search chats or users"
+          placeholder="Filter chats & people"
         />
-        <CiSearch className="absolute left-4 text-zinc-500" />
       </div>
-      <div className="flex-1 flex-col mt-5 overflow-y-auto">
+
+      <div className="flex-1 flex-col mt-4 -mx-0.5 px-0.5 overflow-y-auto oc-scroll">
+        {searchText === "" && (
+          <div className="mb-1 pb-2 border-b border-line">
+            <AssistantRow
+              active={agentActive}
+              onClick={() => router.push(`/agents/${primaryAgent.id}`)}
+            />
+          </div>
+        )}
+
         {filteredChats.length === 0 ? (
-          <div className="px-3 py-2 text-sm text-neutral-400 dark:text-neutral-500">
+          <div className="px-3 py-6 text-[13px] text-ink-faint text-center">
             No chats found
           </div>
         ) : (
-          filteredChats.map((chat) => renderChatRow(chat))
+          <div className="flex flex-col gap-0.5 pt-1">
+            {filteredChats.map((chat) => {
+              const user = chat.otherUserId
+                ? usersById.get(String(chat.otherUserId))
+                : undefined;
+              return user ? renderUserRow(user, chat) : null;
+            })}
+          </div>
         )}
-        {groupsOnly ? null : (
-          <>
-            <div className="px-3 pt-4 pb-1 text-[11px] uppercase tracking-wide text-neutral-400 dark:text-neutral-500 font-semibold">
-              All Users
-            </div>
-            {allUsers.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-neutral-400 dark:text-neutral-500">
-                No users found
-              </div>
-            ) : (
-              allUsers.map((user) =>
-                renderUserRow(
-                  user,
-                  sortedConversations.find(
-                    (convo) =>
-                      !convo.isGroup &&
-                      String(convo.otherUserId) === String(user._id),
-                  ),
+
+        <div className="px-2.5 pt-5 pb-2 text-[10px] uppercase tracking-[0.14em] text-ink-faint font-semibold font-mono">
+          All People
+        </div>
+        {allUsers.length === 0 ? (
+          <div className="px-3 py-2 text-[13px] text-ink-faint">
+            No users found
+          </div>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {allUsers.map((user) =>
+              renderUserRow(
+                user,
+                sortedConversations.find(
+                  (convo) =>
+                    !convo.isGroup &&
+                    String(convo.otherUserId) === String(user._id),
                 ),
-              )
+              ),
             )}
-          </>
+          </div>
         )}
       </div>
-      <CreateGroupModal
-        isOpen={isGroupModalOpen}
-        onClose={() => setIsGroupModalOpen(false)}
+
+      <SemanticSearchModal
+        open={isSemanticOpen}
+        onClose={() => setIsSemanticOpen(false)}
       />
     </div>
   );

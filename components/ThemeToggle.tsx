@@ -15,8 +15,8 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <button className="size-12 flex items-center justify-center rounded-xl transition-colors text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
-        <FiSun className="size-[20px]" />
+      <button className="oc-nav-item oc-focus" aria-label="Toggle theme">
+        <FiSun className="size-[19px]" />
       </button>
     );
   }
@@ -24,14 +24,14 @@ export function ThemeToggle() {
   return (
     <button
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="size-12 flex items-center justify-center rounded-xl transition-colors text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
-      title="Toggle Theme"
+      className="oc-nav-item oc-focus"
+      title="Toggle theme"
       aria-label="Toggle theme"
     >
       {resolvedTheme === "dark" ? (
-        <FiSun className="size-[20px]" />
+        <FiSun className="size-[19px]" />
       ) : (
-        <FiMoon className="size-[20px]" />
+        <FiMoon className="size-[19px]" />
       )}
     </button>
   );

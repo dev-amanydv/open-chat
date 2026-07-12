@@ -321,11 +321,11 @@ export default function Home() {
               <h3
                 className="landing-heading mt-2 text-xl tracking-[-0.02em] text-zinc-900"
               >
-                One surface for chats, groups, and AI agents.
+                One surface for chats and your AI assistant.
               </h3>
               <p className="mt-2 text-sm text-zinc-500">
-                Users can move from personal chat to group communication to
-                agent execution in one consistent interface.
+                Move from a personal conversation to agent-led execution in one
+                consistent interface.
               </p>
               <div className="mt-5 flex items-center justify-between rounded-xl border border-black/8 bg-white/80 px-3 py-2">
                 <div data-reveal>
@@ -355,8 +355,8 @@ export default function Home() {
             <Link href="/chats" className="landing-cta-lg">
               Open the app
             </Link>
-            <Link href="/groups" className="landing-ghost-btn">
-              View team spaces
+            <Link href="/agents/master-mind" className="landing-ghost-btn">
+              Meet your assistant
             </Link>
           </div>
         </section>
@@ -393,11 +393,8 @@ export default function Home() {
                 <Link href="/chats" className="landing-footer-link">
                   Chats
                 </Link>
-                <Link href="/groups" className="landing-footer-link">
-                  Groups
-                </Link>
-                <Link href="/agents" className="landing-footer-link">
-                  Agents
+                <Link href="/agents/master-mind" className="landing-footer-link">
+                  Assistant
                 </Link>
               </div>
             </div>

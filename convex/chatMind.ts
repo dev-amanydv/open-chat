@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 function buildDirectKey(userA: string, userB: string) {
   return [userA, userB].sort().join("::");
@@ -279,13 +280,16 @@ ${actionLine}`;
           });
         }
 
-        await ctx.db.insert("messages", {
+        const messageId = await ctx.db.insert("messages", {
           conversationId: convoId!,
           sender: currentUser._id,
           content: args.content,
           status: "sent",
           deliveryInfo: { deliveredAt: "", readAt: "" },
           isDeleted: false,
+        });
+        await ctx.scheduler.runAfter(0, internal.embeddings.embedMessage, {
+          messageId,
         });
 
         if (convo) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { IoSend } from "react-icons/io5";
 import {
   BsCalendarCheck,
@@ -17,12 +17,22 @@ import {
   HiOutlineHandThumbDown,
   HiHandThumbDown,
 } from "react-icons/hi2";
-import { useUser } from "@clerk/nextjs";
-import { useMutation, useQuery } from "convex/react";
+import { FiChevronLeft, FiCheck, FiX, FiEdit2 } from "react-icons/fi";
+import { HiOutlineListBullet } from "react-icons/hi2";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useChat } from "@ai-sdk/react";
+import {
+  DefaultChatTransport,
+  getToolOrDynamicToolName,
+  isToolUIPart,
+  lastAssistantMessageIsCompleteWithToolCalls,
+  type UIMessage,
+  type ToolUIPart,
+  type DynamicToolUIPart,
+} from "ai";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { getAgentById, AgentMessage, processAgentMessage } from "@/lib/agents";
-import { FiChevronLeft } from "react-icons/fi";
+import { Doc, Id } from "@/convex/_generated/dataModel";
+import { getAgentById, type Agent, type BookingDetails } from "@/lib/agents";
 
 const MAX_TEXTAREA_HEIGHT = 150;
 const SCROLL_BOTTOM_THRESHOLD = 96;
@@ -49,226 +59,371 @@ const STARTER_SUGGESTIONS: Record<string, string[]> = {
   "mail-mind": ["Read my unread emails", "Draft a reply to the client"],
 };
 
-function getFollowUpSuggestions(
-  agentId: string,
-  lastMessage: string,
-  hasBooking: boolean,
-  actionTrace: string[],
-  lastUserMessage?: string,
-): string[] {
-  const lower = lastMessage.toLowerCase();
-  const lowerUser = (lastUserMessage ?? "").toLowerCase();
-  const hasStep = (step: string) => actionTrace.includes(step);
+const TOOL_LABELS: Record<string, string> = {
+  checkAvailability: "Checking availability",
+  bookMeeting: "Booking meeting",
+  getConversations: "Reading conversations",
+  searchMessages: "Searching messages",
+  summarizeConversation: "Summarizing conversation",
+  sendMessage: "Sending message",
+  trackUnreplied: "Finding unreplied chats",
+  getRecentMessages: "Fetching recent messages",
+};
 
-  const transcriptMatch = lastMessage.match(/transcript with ([^:]+):/i);
-  const transcriptName = transcriptMatch?.[1]?.trim();
+type BookingOutput = { booked?: boolean; booking?: BookingDetails };
 
-  const hasPlanPrompt =
-    lower.includes("mastermind plan") ||
-    (lower.includes("step 1") && lower.includes("shall i proceed"));
+const PLAN_TOOL = "updatePlan";
+const APPROVAL_TOOLS = new Set(["sendMessage", "bookMeeting"]);
 
-  const asksForConfirmation =
-    hasPlanPrompt ||
-    hasStep("plan_pending") ||
-    lower.includes("shall i proceed") ||
-    lower.includes("should i proceed") ||
-    lower.includes("ready to send") ||
-    lower.includes('say "confirm"') ||
-    lower.includes("say 'confirm'");
+type AnyToolPart = ToolUIPart | DynamicToolUIPart;
+type PlanStep = { title: string; status: "pending" | "active" | "done" };
 
-  const hasMessageFailure =
-    hasStep("message_failed") ||
-    lower.includes("couldn't find a user") ||
-    lower.includes("missing 'to' or 'content'") ||
-    lower.includes("trouble accessing your messages") ||
-    lower.includes("couldn't access your messages");
-
-  if (asksForConfirmation) {
-    if (agentId === "master-mind") {
-      return ["confirm", "Edit the plan", "Cancel"];
-    }
-    if (agentId === "meeting-mind") {
-      return ["confirm", "Change time", "Cancel"];
-    }
-    if (agentId === "chat-mind") {
-      return ["confirm", "Edit the message", "Cancel"];
-    }
-    return ["confirm", "Edit", "Cancel"];
-  }
-
-  if (hasBooking || hasStep("booked")) {
-    if (hasMessageFailure) {
-      return [
-        "Edit recipient and retry",
-        "Send message with a new name",
-        "Schedule another meeting",
-      ];
-    }
-    if (hasStep("message_sent")) {
-      return [
-        "Check if they replied",
-        "Schedule a follow-up meeting",
-        "Summarize today's activity",
-      ];
-    }
-    return [
-      "Schedule another meeting",
-      "Reschedule this meeting",
-      "Send them a confirmation message",
-    ];
-  }
-
-  if (agentId === "meeting-mind") {
-    if (hasStep("availability_checked") && lower.includes("here are")) {
-      return [
-        "Book the earliest available slot",
-        "Book an afternoon slot",
-        "Show tomorrow's slots",
-      ];
-    }
-    if (lower.includes("available slots") || lower.includes("here are")) {
-      return [
-        "Book the earliest available slot",
-        "Show me afternoon slots instead",
-        "How about next week?",
-      ];
-    }
-    if (lower.includes("not available") || lower.includes("no available")) {
-      return ["What about tomorrow?", "Show me next week's slots"];
-    }
-    return [
-      "Check availability for tomorrow",
-      "Book a slot for this afternoon",
-    ];
-  }
-
-  if (agentId === "chat-mind") {
-    if (hasMessageFailure) {
-      return ["Edit recipient", "Edit message", "Cancel sending"];
-    }
-    if (lower.includes("here are your last")) {
-      return [
-        "Summarize the latest one",
-        "Any unreplied messages?",
-        "Search messages about project update",
-      ];
-    }
-    if (lower.includes("people who haven't replied")) {
-      return [
-        "Draft a reminder message",
-        "Show my last 10 messages",
-        "Who needs follow-up first?",
-      ];
-    }
-    if (transcriptName) {
-      return [
-        "Summarize this conversation",
-        `Draft a reply to ${transcriptName}`,
-        "Show recent conversations",
-      ];
-    }
-    if (
-      lower.includes("recent conversations") ||
-      lower.includes("conversations:")
-    ) {
-      return ["Summarize the latest one", "Any unreplied messages?"];
-    }
-    if (lower.includes("search results")) {
-      return ["Summarize this conversation", "Reply to them"];
-    }
-    if (lower.includes("ready to send")) {
-      return ["confirm", "Edit the message", "Cancel"];
-    }
-    if (lower.includes("message sent successfully")) {
-      return ["Any unreplied messages?", "Show recent conversations"];
-    }
-    return ["Show recent conversations", "Check pending replies"];
-  }
-
-  if (agentId === "master-mind") {
-    if (hasMessageFailure) {
-      return [
-        "Edit recipient and retry",
-        "Revise the message",
-        "Cancel",
-      ];
-    }
-    if (hasStep("booked") && !hasStep("message_sent")) {
-      return [
-        "Send confirmation message to them",
-        "Share meeting details",
-        "Schedule another meeting",
-      ];
-    }
-    if (hasStep("booked") && hasStep("message_sent")) {
-      return [
-        "Check if they replied",
-        "What are my pending actions?",
-        "Schedule another meeting",
-      ];
-    }
-    if (hasStep("delegated")) {
-      return ["confirm", "Revise the plan", "Cancel"];
-    }
-    if (lowerUser.includes("book") || lowerUser.includes("schedule")) {
-      return ["confirm", "Adjust time", "Cancel"];
-    }
-    return ["Explain your plan", "Do it", "Let's change the plan"];
-  }
-
-  return [];
+function planStepsFromPart(part: AnyToolPart): PlanStep[] | null {
+  const src =
+    part.state === "output-available"
+      ? (part.output as { steps?: PlanStep[] } | undefined)?.steps
+      : (part.input as { steps?: PlanStep[] } | undefined)?.steps;
+  return Array.isArray(src) && src.length ? src : null;
 }
 
-function getActionTrace(message: AgentMessage): string[] {
-  if (message.role !== "agent") return [];
-
-  const text = message.content.toLowerCase();
-  const steps: string[] = [];
-
-  if (
-    message.booking ||
-    text.includes("meeting has been booked successfully") ||
-    text.includes("meeting confirmed")
-  ) {
-    steps.push("booked");
+function PlanStatusDot({ status }: { status: PlanStep["status"] }) {
+  if (status === "done") {
+    return (
+      <span className="size-4 rounded-full bg-accent flex items-center justify-center flex-none">
+        <FiCheck className="size-2.5 text-accent-ink" strokeWidth={3} />
+      </span>
+    );
   }
+  if (status === "active") {
+    return (
+      <span className="agent-tool-spin size-4 rounded-full border-2 border-accent border-t-transparent flex-none" />
+    );
+  }
+  return (
+    <span className="size-4 rounded-full border-2 border-line-strong flex-none" />
+  );
+}
 
+function PlanCard({ steps }: { steps: PlanStep[] }) {
+  const done = steps.filter((s) => s.status === "done").length;
+  return (
+    <div className="oc-panel bg-surface-1 rounded-2xl p-3.5 mb-2">
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.12em] text-ink-faint">
+          <HiOutlineListBullet className="size-3.5" /> Plan
+        </span>
+        <span className="text-[10px] font-mono-num text-ink-faint">
+          {done}/{steps.length}
+        </span>
+      </div>
+      <ol className="flex flex-col gap-2">
+        {steps.map((s, i) => (
+          <li key={i} className="flex items-center gap-2.5 text-[13px]">
+            <PlanStatusDot status={s.status} />
+            <span
+              className={
+                s.status === "done"
+                  ? "text-ink-faint line-through"
+                  : s.status === "active"
+                    ? "text-ink font-medium"
+                    : "text-ink-muted"
+              }
+            >
+              {s.title}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function ApprovalCard({
+  part,
+  agentColor,
+  approving,
+  onApprove,
+  onCancel,
+}: {
+  part: AnyToolPart;
+  agentColor: string;
+  approving: boolean;
+  onApprove: (input: Record<string, unknown>) => void;
+  onCancel: () => void;
+}) {
+  const name = getToolOrDynamicToolName(part);
+  const input = (part.input ?? {}) as Record<string, unknown>;
+  const isSend = name === "sendMessage";
+  const [editing, setEditing] = useState(false);
+  const [content, setContent] = useState(String(input.content ?? ""));
+
+  return (
+    <div className="oc-panel bg-surface-1 rounded-2xl overflow-hidden mt-2 shadow-[var(--shadow-md)]">
+      <div
+        className="px-4 py-2.5 flex items-center gap-2 border-b border-line"
+        style={{
+          color: agentColor,
+          backgroundColor: `color-mix(in srgb, ${agentColor} 10%, transparent)`,
+        }}
+      >
+        <span className="text-[11px] font-mono uppercase tracking-[0.1em] font-semibold">
+          {isSend ? "Send message?" : "Book meeting?"}
+        </span>
+        <span className="ml-auto text-[10px] font-mono text-ink-faint">
+          needs your approval
+        </span>
+      </div>
+
+      <div className="px-4 py-3 space-y-2">
+        {isSend ? (
+          <>
+            <p className="text-[12px] text-ink-faint">
+              To{" "}
+              <span className="text-ink font-medium">
+                {String(input.to ?? "—")}
+              </span>
+            </p>
+            {editing ? (
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={3}
+                autoFocus
+                className="oc-input oc-focus w-full text-[13.5px] px-3 py-2 resize-none"
+              />
+            ) : (
+              <p className="text-[13.5px] text-ink leading-relaxed whitespace-pre-wrap bg-surface-3 rounded-xl px-3 py-2">
+                {content}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center gap-6 text-[13.5px]">
+            <div>
+              <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-mono">
+                Date
+              </p>
+              <p className="text-ink font-medium">{String(input.date ?? "—")}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-mono">
+                Time
+              </p>
+              <p className="text-ink font-medium">{String(input.time ?? "—")}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="px-4 pb-3 flex items-center gap-2">
+        <button
+          disabled={approving}
+          onClick={() =>
+            onApprove(isSend ? { ...input, content } : input)
+          }
+          className="oc-btn-accent oc-focus flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[13px] font-semibold disabled:cursor-not-allowed"
+        >
+          {approving ? (
+            <span className="agent-tool-spin size-3.5 rounded-full border-2 border-current border-t-transparent" />
+          ) : (
+            <FiCheck className="size-4" />
+          )}
+          Approve
+        </button>
+        {isSend && (
+          <button
+            disabled={approving}
+            onClick={() => setEditing((e) => !e)}
+            className="oc-icon-btn oc-focus flex items-center gap-1.5 px-3 h-8 rounded-lg text-[13px] font-medium border border-line"
+          >
+            <FiEdit2 className="size-3.5" /> {editing ? "Done" : "Edit"}
+          </button>
+        )}
+        <button
+          disabled={approving}
+          onClick={onCancel}
+          className="oc-icon-btn oc-focus flex items-center gap-1.5 px-3 h-8 rounded-lg text-[13px] font-medium ml-auto"
+        >
+          <FiX className="size-4" /> Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ActionResultChip({ part }: { part: AnyToolPart }) {
+  const name = getToolOrDynamicToolName(part);
+  const out = part.output as
+    | { cancelled?: boolean; error?: string; booked?: boolean; message?: string }
+    | string
+    | undefined;
+
+  if (out && typeof out === "object" && out.cancelled) {
+    return <ResultChip tone="muted" icon="✕" label="Action cancelled" />;
+  }
+  if (out && typeof out === "object" && out.error) {
+    return <ResultChip tone="error" icon="!" label={out.error} />;
+  }
+  if (name === "sendMessage") {
+    return <ResultChip tone="ok" icon="✓" label="Message sent" />;
+  }
   if (
-    text.includes("confirmation message status") ||
-    text.includes("message sent successfully")
+    name === "bookMeeting" &&
+    out &&
+    typeof out === "object" &&
+    out.booked === false
   ) {
+    return (
+      <ResultChip tone="error" icon="!" label={out.message ?? "Couldn't book"} />
+    );
+  }
+  return null;
+}
+
+function ResultChip({
+  tone,
+  icon,
+  label,
+}: {
+  tone: "ok" | "muted" | "error";
+  icon: string;
+  label: string;
+}) {
+  const cls =
+    tone === "ok"
+      ? "text-positive border-positive/40"
+      : tone === "error"
+        ? "text-red-500 border-red-500/40"
+        : "text-ink-faint border-line";
+  return (
+    <span
+      className={`mt-2 inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-full border bg-surface-2 ${cls}`}
+    >
+      <span>{icon}</span>
+      {label}
+    </span>
+  );
+}
+
+function messageText(message: UIMessage): string {
+  return message.parts
+    .filter((p) => p.type === "text")
+    .map((p) => (p as { text: string }).text)
+    .join("");
+}
+
+function messageReasoning(message: UIMessage): string {
+  return message.parts
+    .filter((p) => p.type === "reasoning")
+    .map((p) => (p as { text: string }).text)
+    .join("\n");
+}
+
+function messageBooking(message: UIMessage): BookingDetails | undefined {
+  for (const part of message.parts) {
     if (
-      text.includes("message sent successfully") ||
-      text.includes("✅ message sent successfully")
+      isToolUIPart(part) &&
+      getToolOrDynamicToolName(part) === "bookMeeting" &&
+      part.state === "output-available"
     ) {
-      steps.push("message_sent");
-    } else if (
-      text.includes("couldn't find a user") ||
-      text.includes("missing 'to' or 'content'") ||
-      text.includes("trouble accessing your messages") ||
-      text.includes("couldn't access your messages")
-    ) {
-      steps.push("message_failed");
+      const out = part.output as BookingOutput;
+      if (out?.booked && out.booking) return out.booking;
     }
   }
+  return undefined;
+}
 
+function persistableParts(message: UIMessage) {
+  return message.parts.filter(
+    (p) => p.type === "text" || p.type === "reasoning" || isToolUIPart(p),
+  );
+}
+
+function docToUIMessage(doc: Doc<"agentMessages">): UIMessage {
+  let parts: UIMessage["parts"] | null = null;
+  if (doc.uiParts) {
+    try {
+      parts = JSON.parse(doc.uiParts) as UIMessage["parts"];
+    } catch {
+      parts = null;
+    }
+  }
+  return {
+    id: doc._id,
+    role: doc.role === "user" ? "user" : "assistant",
+    parts: parts?.length ? parts : [{ type: "text", text: doc.content }],
+  } as UIMessage;
+}
+
+function seedRatings(docs: Doc<"agentMessages">[]) {
+  const seeded: Record<string, "up" | "down" | undefined> = {};
+  for (const doc of docs) {
+    if (doc.rating) seeded[doc._id] = doc.rating;
+  }
+  return seeded;
+}
+
+function getFollowUps(agentId: string, message: UIMessage): string[] {
+  const tools = message.parts
+    .filter(isToolUIPart)
+    .map((p) => getToolOrDynamicToolName(p));
+
+  if (tools.includes("bookMeeting") && messageBooking(message)) {
+    return ["Schedule another meeting", "Send them a confirmation message"];
+  }
+  if (tools.includes("checkAvailability")) {
+    return ["Book the earliest slot", "Try another day"];
+  }
+  if (tools.includes("trackUnreplied")) {
+    return ["Draft a reminder message", "Show my recent messages"];
+  }
   if (
-    text.includes("available slots") ||
-    text.includes("slot is available") ||
-    text.includes("isn't available")
+    tools.includes("getConversations") ||
+    tools.includes("getRecentMessages")
   ) {
-    steps.push("availability_checked");
+    return ["Summarize the latest one", "Any unreplied messages?"];
   }
+  return (STARTER_SUGGESTIONS[agentId] ?? []).slice(0, 2);
+}
 
-  if (text.includes("completed the task")) {
-    steps.push("delegated");
-  }
-
-  if (text.includes("mastermind plan") && text.includes("shall i proceed")) {
-    steps.push("plan_pending");
-  }
-
-  return Array.from(new Set(steps));
+function AgentHeader({ agent, onBack }: { agent: Agent; onBack: () => void }) {
+  const IconComponent = agent.icon;
+  return (
+    <div className="oc-frost flex-none px-4 md:px-5 h-16 border-b border-line flex items-center gap-2">
+      <button
+        onClick={onBack}
+        className="oc-icon-btn oc-focus md:hidden size-9 -ml-1 mr-1"
+      >
+        <FiChevronLeft className="text-xl" />
+      </button>
+      <div className="flex items-center gap-3">
+        <div
+          className="size-10 rounded-2xl flex items-center justify-center border flex-none"
+          style={{
+            color: agent.color,
+            backgroundColor: `color-mix(in srgb, ${agent.color} 12%, transparent)`,
+            borderColor: `color-mix(in srgb, ${agent.color} 26%, transparent)`,
+          }}
+        >
+          <IconComponent className="size-[19px]" />
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-[15px] font-semibold text-ink tracking-tight flex items-center gap-2">
+            {agent.name}
+            {agent.status !== "coming_soon" && (
+              <span className="flex items-center gap-1 text-[10px] font-medium text-positive font-mono">
+                <span className="oc-online size-1.5 rounded-full" />
+                online
+              </span>
+            )}
+          </h1>
+          <p className="text-[12.5px] text-ink-faint leading-snug max-w-md hidden sm:block truncate">
+            {agent.description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AgentChatPage() {
@@ -276,47 +431,174 @@ export default function AgentChatPage() {
   const router = useRouter();
   const agentId = params.agentId as string;
   const agent = getAgentById(agentId);
-  const { user } = useUser();
-
-  const [chatId, setChatId] = useState<Id<"agentChats"> | null>(null);
-  const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [hasUnseenMessages, setHasUnseenMessages] = useState(false);
-  const previousMessageCountRef = useRef(0);
-  const hasInitializedScrollRef = useRef(false);
 
   const getOrCreateChat = useMutation(api.agentChats.getOrCreateChat);
-  const sendConvexMessage = useMutation(api.agentChats.sendMessage);
-  const rateMessage = useMutation(api.agentChats.rateMessage);
-  const persistedMessages = useQuery(
+  const { isAuthenticated } = useConvexAuth();
+  const [resolved, setResolved] = useState<{
+    agentId: string;
+    id: Id<"agentChats">;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    getOrCreateChat({ agentId }).then((id) => {
+      if (active) setResolved({ agentId, id });
+    });
+    return () => {
+      active = false;
+    };
+  }, [agentId, isAuthenticated, getOrCreateChat]);
+
+  const chatId = resolved?.agentId === agentId ? resolved.id : null;
+  const persisted = useQuery(
     api.agentChats.getMessages,
     chatId ? { chatId } : "skip",
   );
 
-  useEffect(() => {
-    setChatId(null);
-    setLocalMessages([]);
-    setInput("");
-    getOrCreateChat({ agentId }).then(setChatId);
-  }, [agentId, getOrCreateChat]);
-
-  useEffect(() => {
-    if (!persistedMessages) return;
-    setLocalMessages(
-      persistedMessages.map((m) => ({
-        id: m._id,
-        role: m.role,
-        content: m.content,
-        timestamp: m._creationTime,
-        booking: m.booking,
-        rating: m.rating,
-      })),
+  if (!agent) {
+    return (
+      <div className="oc-canvas h-full flex items-center justify-center">
+        <p className="text-ink-faint">Agent not found</p>
+      </div>
     );
-  }, [persistedMessages]);
+  }
+
+  if (!chatId || persisted === undefined) {
+    return (
+      <div className="oc-canvas h-full flex flex-col">
+        <AgentHeader agent={agent} onBack={() => router.push("/agents")} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex items-center gap-1.5">
+            {[0, 0.15, 0.3].map((d) => (
+              <span
+                key={d}
+                className="agent-thinking-dot size-1.5 rounded-full bg-ink-faint"
+                style={{ animationDelay: `${d}s` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AgentChat
+      key={chatId}
+      agent={agent}
+      agentId={agentId}
+      chatId={chatId}
+      initial={persisted}
+      onBack={() => router.push("/agents")}
+    />
+  );
+}
+
+function AgentChat({
+  agent,
+  agentId,
+  chatId,
+  initial,
+  onBack,
+}: {
+  agent: Agent;
+  agentId: string;
+  chatId: Id<"agentChats">;
+  initial: Doc<"agentMessages">[];
+  onBack: () => void;
+}) {
+  const [initialMessages] = useState<UIMessage[]>(() =>
+    initial.map(docToUIMessage),
+  );
+  const [ratings, setRatings] = useState<
+    Record<string, "up" | "down" | undefined>
+  >(() => seedRatings(initial));
+  const [idMap, setIdMap] = useState<Record<string, string>>({});
+  const [input, setInput] = useState("");
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasUnseenMessages, setHasUnseenMessages] = useState(false);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const didInitialScroll = useRef(false);
+
+  const sendConvexMessage = useMutation(api.agentChats.sendMessage);
+  const rateMessage = useMutation(api.agentChats.rateMessage);
+
+  const [transport] = useState(
+    () =>
+      new DefaultChatTransport({ api: "/api/agents/chat", body: { agentId } }),
+  );
+
+  const { messages, sendMessage, status, addToolResult } = useChat({
+    id: chatId,
+    messages: initialMessages,
+    transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    onFinish: async ({ message }) => {
+      const booking = messageBooking(message);
+      const convexId = await sendConvexMessage({
+        chatId,
+        role: "agent",
+        content: messageText(message) || "…",
+        uiParts: JSON.stringify(persistableParts(message)),
+        booking,
+      });
+      setIdMap((prev) => ({ ...prev, [message.id]: convexId as string }));
+    },
+  });
+
+  const busy = status === "submitted" || status === "streaming";
+
+  const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
+
+  const runApproval = useCallback(
+    async (
+      toolName: string,
+      toolCallId: string,
+      input: Record<string, unknown>,
+    ) => {
+      setApprovingIds((prev) => new Set(prev).add(toolCallId));
+      try {
+        const res = await fetch("/api/agents/execute-tool", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toolName, input }),
+        });
+        const data = await res.json();
+        addToolResult({
+          tool: toolName,
+          toolCallId,
+          output: data.output ?? { error: "No result." },
+        });
+      } catch {
+        addToolResult({
+          tool: toolName,
+          toolCallId,
+          output: { error: "The action could not be completed." },
+        });
+      } finally {
+        setApprovingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(toolCallId);
+          return next;
+        });
+      }
+    },
+    [addToolResult],
+  );
+
+  const cancelApproval = useCallback(
+    (toolName: string, toolCallId: string) => {
+      addToolResult({
+        tool: toolName,
+        toolCallId,
+        output: { cancelled: true, message: "User cancelled this action." },
+      });
+    },
+    [addToolResult],
+  );
 
   const checkIsAtBottom = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -337,47 +619,23 @@ export default function AgentChatPage() {
   const handleMessagesScroll = useCallback(() => {
     const atBottom = checkIsAtBottom();
     setIsAtBottom(atBottom);
-    if (atBottom) {
-      setHasUnseenMessages(false);
-    }
+    if (atBottom) setHasUnseenMessages(false);
   }, [checkIsAtBottom]);
 
   useEffect(() => {
-    hasInitializedScrollRef.current = false;
-    previousMessageCountRef.current = 0;
-    setIsAtBottom(true);
-    setHasUnseenMessages(false);
-  }, [chatId]);
+    if (didInitialScroll.current) return;
+    didInitialScroll.current = true;
+    const raf = requestAnimationFrame(() => scrollToBottom("auto"));
+    return () => cancelAnimationFrame(raf);
+  }, [scrollToBottom]);
 
   useEffect(() => {
-    const currentMessageCount = localMessages.length;
-
-    if (!hasInitializedScrollRef.current) {
-      hasInitializedScrollRef.current = true;
-      previousMessageCountRef.current = currentMessageCount;
-
-      if (currentMessageCount > 0) {
-        requestAnimationFrame(() => scrollToBottom("auto"));
-      }
-      return;
-    }
-
-    const hasNewMessage = currentMessageCount > previousMessageCountRef.current;
-    previousMessageCountRef.current = currentMessageCount;
-    if (!hasNewMessage) return;
-
-    if (checkIsAtBottom()) {
-      requestAnimationFrame(() => scrollToBottom("smooth"));
-      return;
-    }
-
-    setHasUnseenMessages(true);
-  }, [localMessages, checkIsAtBottom, scrollToBottom]);
-
-  useEffect(() => {
-    if (!isThinking) return;
-    requestAnimationFrame(() => scrollToBottom("smooth"));
-  }, [isThinking, scrollToBottom]);
+    const raf = requestAnimationFrame(() => {
+      if (checkIsAtBottom()) scrollToBottom("smooth");
+      else if (busy) setHasUnseenMessages(true);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [messages, busy, checkIsAtBottom, scrollToBottom]);
 
   const handleInput = useCallback(() => {
     const ta = textareaRef.current;
@@ -388,71 +646,17 @@ export default function AgentChatPage() {
       ta.scrollHeight > MAX_TEXTAREA_HEIGHT ? "auto" : "hidden";
   }, []);
 
-  const sendMessage = async (content: string) => {
-    if (!content.trim() || !agent || !chatId) return;
-
+  const submit = (content: string) => {
+    const text = content.trim();
+    if (!text || busy) return;
     setInput("");
-    setIsThinking(true);
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+    sendConvexMessage({ chatId, role: "user", content: text });
+    sendMessage({ text }, { body: { agentId } });
     requestAnimationFrame(() => scrollToBottom("smooth"));
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-
-    await sendConvexMessage({ chatId, role: "user", content: content.trim() });
-    requestAnimationFrame(() => scrollToBottom("smooth"));
-
-    try {
-      const reply = await processAgentMessage(
-        agent.id,
-        content.trim(),
-        localMessages,
-        user?.fullName ?? user?.firstName ?? "Guest",
-        user?.primaryEmailAddress?.emailAddress ?? "guest@example.com",
-      );
-
-      await sendConvexMessage({
-        chatId,
-        role: "agent",
-        content: reply.content,
-        booking: reply.booking,
-      });
-      requestAnimationFrame(() => scrollToBottom("smooth"));
-
-      const hasInlineMessageStatus =
-        /confirmation message status|message sent successfully/i.test(
-          reply.content,
-        );
-
-      if (reply.booking && !hasInlineMessageStatus) {
-        await sendConvexMessage({
-          chatId,
-          role: "agent",
-          content: `📧 A confirmation email with complete meeting details has been sent to **${reply.booking.attendeeEmail}**. You'll also receive a calendar invite shortly. See you there!`,
-        });
-        requestAnimationFrame(() => scrollToBottom("smooth"));
-      }
-    } catch {
-      await sendConvexMessage({
-        chatId,
-        role: "agent",
-        content: "Something went wrong. Please try again.",
-      });
-      requestAnimationFrame(() => scrollToBottom("smooth"));
-    } finally {
-      setIsThinking(false);
-      requestAnimationFrame(() => scrollToBottom("smooth"));
-    }
   };
 
-  const handleSend = () => sendMessage(input);
-
-  const handleRate = async (messageId: string, rating: "up" | "down") => {
-    await rateMessage({
-      messageId: messageId as Id<"agentMessages">,
-      rating,
-    });
-  };
+  const handleSend = () => submit(input);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -461,79 +665,66 @@ export default function AgentChatPage() {
     }
   };
 
-  const followUpSuggestions = useMemo(() => {
-    if (localMessages.length === 0 || isThinking) return [];
-    const lastMsg = localMessages[localMessages.length - 1];
-    if (lastMsg.role !== "agent") return [];
-    const actionTrace = getActionTrace(lastMsg);
-    const previousUserMessage = [...localMessages]
-      .reverse()
-      .find((m) => m.role === "user")?.content;
-    return getFollowUpSuggestions(
-      agentId,
-      lastMsg.content,
-      Boolean(lastMsg.booking),
-      actionTrace,
-      previousUserMessage,
-    );
-  }, [localMessages, agentId, isThinking]);
+  const convexIdFor = (uiId: string) => idMap[uiId] ?? uiId;
 
-  if (!agent) {
-    return (
-      <div className="h-full flex items-center justify-center bg-[#fafafa] dark:bg-[#0a0a0a]">
-        <p className="text-neutral-400 dark:text-neutral-500">
-          Agent not found
-        </p>
-      </div>
-    );
-  }
+  const handleRate = async (uiId: string, rating: "up" | "down") => {
+    const cid = convexIdFor(uiId);
+    const next = ratings[cid] === rating ? undefined : rating;
+    setRatings((prev) => ({ ...prev, [cid]: next }));
+    try {
+      await rateMessage({ messageId: cid as Id<"agentMessages">, rating });
+    } catch {
+    }
+  };
+
+  const lastMessage = messages[messages.length - 1];
+  const followUps =
+    !busy && lastMessage?.role === "assistant"
+      ? getFollowUps(agentId, lastMessage)
+      : [];
+  const showThinkingDots =
+    status === "submitted" ||
+    (status === "streaming" && lastMessage?.role !== "assistant");
 
   const IconComponent = agent.icon;
   const starters = STARTER_SUGGESTIONS[agentId] ?? [];
 
   return (
-    <div className="h-full relative flex flex-col bg-[#fafafa] dark:bg-[#0a0a0a]">
-      <div className="flex-none px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center gap-2 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md">
-        <button
-          onClick={() => router.push("/agents")}
-          className="md:hidden p-2 -ml-3 mr-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-        >
-          <FiChevronLeft className="text-xl text-neutral-800 dark:text-zinc-100" />
-        </button>
-        <div className="flex items-center gap-3.5">
-          <div className="size-11 rounded-xl flex items-center justify-center agent-hero-icon bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
-            <IconComponent className="size-[20px]" />
-          </div>
-          <div>
-            <h1 className="text-[15px] font-semibold text-neutral-800 dark:text-zinc-100">
-              {agent.name}
-            </h1>
-            <p className="text-[12.5px] text-neutral-400 dark:text-neutral-500 leading-snug max-w-md hidden sm:block">
-              {agent.description}
-            </p>
-          </div>
-        </div>
-      </div>
+    <div
+      className="oc-canvas h-full relative flex flex-col"
+      style={{ ["--agent" as string]: agent.color }}
+    >
+      <AgentHeader agent={agent} onBack={onBack} />
 
       <div
         ref={scrollContainerRef}
         onScroll={handleMessagesScroll}
-        className="flex-1 min-h-0 overflow-y-auto"
+        className="oc-scroll flex-1 min-h-0 overflow-y-auto"
       >
-        <div className="flex flex-col gap-3 px-4 py-4 max-w-3xl mx-auto">
-          {localMessages.length === 0 && !isThinking && (
-            <div className="flex flex-col items-center justify-center py-12 agent-empty-entrance">
-              <div className="size-20 rounded-3xl flex items-center justify-center mb-5 relative bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 shadow-sm">
+        <div className="flex flex-col gap-3 px-4 py-5 max-w-3xl mx-auto">
+          {messages.length === 0 && !busy && (
+            <div className="flex flex-col items-center justify-center py-12 oc-reveal">
+              <div
+                className="oc-glow relative size-20 rounded-[26px] flex items-center justify-center mb-5 border"
+                style={{
+                  color: agent.color,
+                  backgroundColor: `color-mix(in srgb, ${agent.color} 14%, transparent)`,
+                  borderColor: `color-mix(in srgb, ${agent.color} 30%, transparent)`,
+                }}
+              >
                 <IconComponent className="size-9" />
-                <div className="absolute -top-1 -right-1 size-6 rounded-full flex items-center justify-center bg-zinc-900 dark:bg-blue-600 border-2 border-white dark:border-zinc-900">
+                <div
+                  className="absolute -top-1 -right-1 size-6 rounded-full flex items-center justify-center border-2 border-surface"
+                  style={{ backgroundColor: agent.color }}
+                >
                   <HiSparkles className="size-3.5 text-white" />
                 </div>
               </div>
 
-              <h2 className="text-[17px] font-semibold text-neutral-800 dark:text-zinc-100 mb-1.5">
+              <h2 className="text-[18px] font-semibold text-ink mb-1.5 tracking-tight">
                 {agent.name}
               </h2>
-              <p className="text-[13px] text-neutral-400 dark:text-neutral-500 text-center max-w-xs mb-8 leading-relaxed">
+              <p className="text-[13px] text-ink-faint text-center max-w-xs mb-8 leading-relaxed">
                 {agent.description}
               </p>
 
@@ -541,7 +732,7 @@ export default function AgentChatPage() {
                 {getCapabilities(agentId).map((cap) => (
                   <span
                     key={cap}
-                    className="text-[11.5px] px-3 py-1.5 rounded-full font-medium bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300"
+                    className="text-[11.5px] px-3 py-1.5 rounded-full font-medium bg-surface-2 border border-line text-ink-muted"
                   >
                     {cap}
                   </span>
@@ -549,7 +740,7 @@ export default function AgentChatPage() {
               </div>
 
               {agent.status === "coming_soon" ? (
-                <div className="mt-4 px-6 py-4 rounded-2xl flex items-center justify-center text-center max-w-sm bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
+                <div className="mt-4 px-6 py-4 rounded-2xl flex items-center justify-center text-center max-w-sm oc-panel bg-surface-2 text-ink-muted">
                   <p className="text-[14px] font-medium">
                     This agent is currently in development and will be available
                     soon!
@@ -557,22 +748,15 @@ export default function AgentChatPage() {
                 </div>
               ) : (
                 <>
-                  <p className="text-[11px] text-neutral-300 dark:text-neutral-600 uppercase tracking-widest mb-3 font-medium">
+                  <p className="text-[10px] text-ink-faint uppercase tracking-[0.14em] mb-3 font-semibold font-mono">
                     Try asking
                   </p>
                   <div className="grid grid-cols-2 gap-2 w-full max-w-md">
                     {starters.map((s) => (
                       <button
                         key={s}
-                        onClick={() => sendMessage(s)}
-                        disabled={!chatId}
-                        className="text-left text-[13px] px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer suggestion-chip"
-                        style={{
-                          background:
-                            "var(--tw-bg-opacity, rgba(255,255,255,0.7))",
-                          backdropFilter: "blur(8px)",
-                          border: "1px solid rgba(0,0,0,0.05)",
-                        }}
+                        onClick={() => submit(s)}
+                        className="oc-row text-left text-[13px] px-4 py-3 bg-surface-2 border-line cursor-pointer text-ink-muted hover:text-ink"
                       >
                         {s}
                       </button>
@@ -583,45 +767,103 @@ export default function AgentChatPage() {
             </div>
           )}
 
-          {localMessages.map((msg, idx) => (
-            <div
-              key={msg.id}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} agent-msg-entrance`}
-            >
-              {msg.role === "agent" && (
-                <div className="size-7 rounded-lg flex items-center justify-center flex-none mr-2 mt-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">
-                  <IconComponent className="size-3.5" />
-                </div>
-              )}
-              <div className="max-w-[75%]">
-                <div
-                  className={`px-4 py-2.5 ${
-                    msg.role === "user"
-                      ? "agent-msg-user bg-zinc-800 dark:bg-blue-600 text-white rounded-[16px_16px_4px_16px]"
-                      : "agent-msg-bot bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm rounded-[16px_16px_16px_4px]"
-                  }`}
-                  style={{
-                    WebkitUserSelect: "none",
-                    WebkitTouchCallout: "none",
-                  }}
-                >
-                  <p
-                    className={`text-[14px] leading-relaxed whitespace-pre-wrap ${msg.role === "agent" ? "text-neutral-700 dark:text-zinc-300" : ""}`}
-                  >
-                    {msg.content}
-                  </p>
+          {messages.map((msg, idx) => {
+            const isUser = msg.role === "user";
+            const text = messageText(msg);
+            const reasoning = isUser ? "" : messageReasoning(msg);
+            const allToolParts = (
+              isUser ? [] : msg.parts.filter(isToolUIPart)
+            ) as AnyToolPart[];
+            const planPart = [...allToolParts]
+              .reverse()
+              .find((p) => getToolOrDynamicToolName(p) === PLAN_TOOL);
+            const planSteps = planPart ? planStepsFromPart(planPart) : null;
+            const chipParts = allToolParts.filter((p) => {
+              const n = getToolOrDynamicToolName(p);
+              return n !== PLAN_TOOL && !APPROVAL_TOOLS.has(n);
+            });
+            const writeParts = allToolParts.filter((p) =>
+              APPROVAL_TOOLS.has(getToolOrDynamicToolName(p)),
+            );
+            const booking = isUser ? undefined : messageBooking(msg);
+            const rating = ratings[convexIdFor(msg.id)];
+            const isLast = idx === messages.length - 1;
 
-                  {msg.booking && (
-                    <div className="mt-3 rounded-2xl overflow-hidden booking-card bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm">
-                      <div className="px-5 py-4 flex items-center gap-3 bg-zinc-900 dark:bg-zinc-950">
+            return (
+              <div
+                key={msg.id}
+                className={`flex ${isUser ? "justify-end" : "justify-start"} agent-msg-entrance`}
+              >
+                {!isUser && (
+                  <div
+                    className="size-7 rounded-xl flex items-center justify-center flex-none mr-2 mt-1 border"
+                    style={{
+                      color: agent.color,
+                      backgroundColor: `color-mix(in srgb, ${agent.color} 12%, transparent)`,
+                      borderColor: `color-mix(in srgb, ${agent.color} 26%, transparent)`,
+                    }}
+                  >
+                    <IconComponent className="size-3.5" />
+                  </div>
+                )}
+                <div className="max-w-[78%]">
+                  {planSteps && <PlanCard steps={planSteps} />}
+
+                  {!isUser && (reasoning || chipParts.length > 0) && (
+                    <div className="mb-1.5 space-y-1.5">
+                      {reasoning && (
+                        <details className="group">
+                          <summary className="cursor-pointer list-none text-[10px] uppercase tracking-[0.12em] font-mono text-ink-faint hover:text-ink-muted select-none flex items-center gap-1.5">
+                            <HiSparkles className="size-3" /> Reasoning
+                          </summary>
+                          <p className="mt-1.5 text-[12px] leading-relaxed whitespace-pre-wrap text-ink-muted border-l-2 border-line-strong pl-3">
+                            {reasoning}
+                          </p>
+                        </details>
+                      )}
+                      {chipParts.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] uppercase tracking-[0.12em] font-mono text-ink-faint">
+                            Tools
+                          </span>
+                          {chipParts.map((part, i) => (
+                            <ToolChip key={i} part={part} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(text || isUser) && (
+                    <div
+                      className={
+                        isUser
+                          ? "oc-bubble oc-bubble-me agent-msg-user"
+                          : "oc-bubble oc-bubble-them agent-msg-bot"
+                      }
+                    >
+                      <p className="text-[14px] leading-relaxed whitespace-pre-wrap">
+                        {text}
+                      </p>
+                    </div>
+                  )}
+
+                  {booking && (
+                    <div className="mt-2 rounded-2xl overflow-hidden booking-card oc-panel bg-surface-1 shadow-[var(--shadow-md)]">
+                      <div
+                        className="px-5 py-4 flex items-center gap-3"
+                        style={{
+                          background: `linear-gradient(135deg, ${agent.color}, color-mix(in srgb, ${agent.color} 70%, #000))`,
+                        }}
+                      >
                         <div className="size-10 rounded-full bg-white/20 flex items-center justify-center">
                           <BsCheckCircleFill className="size-5 text-white" />
                         </div>
                         <div>
                           <p className="text-[14px] font-semibold text-white">
-                            Meeting Confirmed!
+                            Meeting confirmed
                           </p>
-                          <p className="text-[12px] text-white/70">
+                          <p className="text-[12px] text-white/75">
                             Your meeting has been scheduled successfully
                           </p>
                         </div>
@@ -629,34 +871,32 @@ export default function AgentChatPage() {
 
                       <div className="px-5 py-4 space-y-3">
                         <div className="flex items-start gap-3">
-                          <BsCalendarCheck className="size-4 mt-0.5 flex-none text-zinc-500 dark:text-zinc-400" />
+                          <BsCalendarCheck className="size-4 mt-0.5 flex-none text-ink-faint" />
                           <div>
-                            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 uppercase tracking-wider font-medium">
+                            <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-semibold font-mono">
                               Meeting
                             </p>
-                            <p className="text-[14px] font-medium text-neutral-800 dark:text-zinc-100">
-                              {msg.booking.title}
+                            <p className="text-[14px] font-medium text-ink">
+                              {booking.title}
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex gap-6">
-                          <div className="flex items-start gap-3">
-                            <BsClock
-                              className="size-4 mt-0.5 flex-none"
-                              style={{ color: agent.color }}
-                            />
-                            <div>
-                              <p className="text-[11px] text-neutral-400 dark:text-neutral-500 uppercase tracking-wider font-medium">
-                                Date & Time
-                              </p>
-                              <p className="text-[13.5px] text-neutral-700 dark:text-zinc-300">
-                                {msg.booking.date}
-                              </p>
-                              <p className="text-[13.5px] font-medium text-neutral-800 dark:text-zinc-100">
-                                {msg.booking.time}
-                              </p>
-                            </div>
+                        <div className="flex items-start gap-3">
+                          <BsClock
+                            className="size-4 mt-0.5 flex-none"
+                            style={{ color: agent.color }}
+                          />
+                          <div>
+                            <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-semibold font-mono">
+                              Date &amp; time
+                            </p>
+                            <p className="text-[13.5px] text-ink-muted">
+                              {booking.date}
+                            </p>
+                            <p className="text-[13.5px] font-medium text-ink">
+                              {booking.time}
+                            </p>
                           </div>
                         </div>
 
@@ -666,24 +906,21 @@ export default function AgentChatPage() {
                             style={{ color: agent.color }}
                           />
                           <div>
-                            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 uppercase tracking-wider font-medium">
+                            <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-semibold font-mono">
                               Attendee
                             </p>
-                            <p className="text-[13.5px] text-neutral-700 dark:text-zinc-300">
-                              {msg.booking.attendeeName}
+                            <p className="text-[13.5px] text-ink-muted">
+                              {booking.attendeeName}
                             </p>
                           </div>
                         </div>
 
-                        <div
-                          className="flex items-center gap-2.5 mt-2 pt-3 border-t"
-                          style={{ borderColor: `${agent.color}12` }}
-                        >
-                          <BsEnvelopeFill className="size-3.5 flex-none text-zinc-500 dark:text-zinc-400" />
-                          <p className="text-[12px] text-neutral-400 dark:text-neutral-500">
+                        <div className="flex items-center gap-2.5 mt-2 pt-3 border-t border-line">
+                          <BsEnvelopeFill className="size-3.5 flex-none text-ink-faint" />
+                          <p className="text-[12px] text-ink-faint">
                             Confirmation sent to{" "}
-                            <span className="text-neutral-600 dark:text-neutral-300 font-medium">
-                              {msg.booking.attendeeEmail}
+                            <span className="text-ink-muted font-medium">
+                              {booking.attendeeEmail}
                             </span>
                           </p>
                         </div>
@@ -691,106 +928,119 @@ export default function AgentChatPage() {
                     </div>
                   )}
 
-                  <p
-                    className={`text-[10.5px] mt-1 ${
-                      msg.role === "user"
-                        ? "text-white/50 text-right"
-                        : "text-neutral-300"
-                    }`}
-                  >
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-
-                {msg.role === "agent" && getActionTrace(msg).length > 0 && (
-                  <div className="hidden md:flex flex-wrap items-center gap-1.5 mt-1.5 ml-1">
-                    <span className="text-[10px] uppercase tracking-[0.1em] text-neutral-400 dark:text-neutral-500">
-                      Action Trace
-                    </span>
-                    {getActionTrace(msg).map((step) => (
-                      <span
-                        key={step}
-                        className="text-[10.5px] px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-medium tracking-wide"
-                      >
-                        {step}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {msg.role === "agent" && (
-                  <div className="flex items-center gap-0.5 mt-1 ml-1">
-                    <button
-                      onClick={() => handleRate(msg.id, "up")}
-                      className="rating-btn group"
-                      title="Good response"
-                    >
-                      {msg.rating === "up" ? (
-                        <HiHandThumbUp className="size-3.5 transition-all duration-200 text-zinc-500" />
-                      ) : (
-                        <HiOutlineHandThumbUp className="size-3.5 text-neutral-300 group-hover:text-neutral-500 transition-all duration-200" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleRate(msg.id, "down")}
-                      className="rating-btn group"
-                      title="Poor response"
-                    >
-                      {msg.rating === "down" ? (
-                        <HiHandThumbDown className="size-3.5 text-red-400 transition-all duration-200" />
-                      ) : (
-                        <HiOutlineHandThumbDown className="size-3.5 text-neutral-300 group-hover:text-neutral-500 transition-all duration-200" />
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {msg.role === "agent" &&
-                  idx === localMessages.length - 1 &&
-                  followUpSuggestions.length > 0 &&
-                  !isThinking && (
-                    <div className="flex flex-wrap gap-1.5 mt-2 ml-1 agent-suggestions-entrance">
-                      {followUpSuggestions.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => sendMessage(s)}
-                          className="text-[12px] px-3 py-1.5 rounded-lg transition-all duration-200 cursor-pointer suggestion-chip-inline bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                  {writeParts.map((part) => {
+                    const n = getToolOrDynamicToolName(part);
+                    const pending =
+                      part.state === "input-available" ||
+                      part.state === "input-streaming";
+                    const resolved = part.state === "output-available";
+                    const out = part.output as BookingOutput | undefined;
+                    if (n === "bookMeeting" && resolved && out?.booked) {
+                      return null;
+                    }
+                    if (pending) {
+                      if (isLast && !busy) {
+                        return (
+                          <ApprovalCard
+                            key={part.toolCallId}
+                            part={part}
+                            agentColor={agent.color}
+                            approving={approvingIds.has(part.toolCallId)}
+                            onApprove={(input) =>
+                              runApproval(n, part.toolCallId, input)
+                            }
+                            onCancel={() =>
+                              cancelApproval(n, part.toolCallId)
+                            }
+                          />
+                        );
+                      }
+                      return (
+                        <div
+                          key={part.toolCallId}
+                          className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-ink-faint border border-line rounded-full px-2.5 py-1 bg-surface-2"
                         >
-                          {s}
-                        </button>
-                      ))}
+                          <span className="agent-tool-spin size-3 rounded-full border-2 border-ink-faint border-t-transparent" />
+                          Waiting to {n === "sendMessage" ? "send" : "book"}…
+                        </div>
+                      );
+                    }
+                    if (resolved) {
+                      return (
+                        <ActionResultChip key={part.toolCallId} part={part} />
+                      );
+                    }
+                    return null;
+                  })}
+
+                  {!isUser && text && (
+                    <div className="flex items-center gap-0.5 mt-1 ml-1">
+                      <button
+                        onClick={() => handleRate(msg.id, "up")}
+                        className="rating-btn oc-icon-btn size-7 rounded-lg group"
+                        title="Good response"
+                      >
+                        {rating === "up" ? (
+                          <HiHandThumbUp className="size-3.5 text-accent" />
+                        ) : (
+                          <HiOutlineHandThumbUp className="size-3.5 text-ink-faint group-hover:text-ink-muted transition-colors" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleRate(msg.id, "down")}
+                        className="rating-btn oc-icon-btn size-7 rounded-lg group"
+                        title="Poor response"
+                      >
+                        {rating === "down" ? (
+                          <HiHandThumbDown className="size-3.5 text-red-400" />
+                        ) : (
+                          <HiOutlineHandThumbDown className="size-3.5 text-ink-faint group-hover:text-ink-muted transition-colors" />
+                        )}
+                      </button>
                     </div>
                   )}
-              </div>
-            </div>
-          ))}
 
-          {isThinking && (
+                  {!isUser &&
+                    idx === messages.length - 1 &&
+                    followUps.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2 ml-1 agent-suggestions-entrance">
+                        {followUps.map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => submit(s)}
+                            className="oc-row text-[12px] px-3 py-1.5 cursor-pointer bg-surface-2 border-line text-ink-muted hover:text-ink"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                </div>
+              </div>
+            );
+          })}
+
+          {showThinkingDots && (
             <div className="flex justify-start">
               <div
-                className="size-7 rounded-lg flex items-center justify-center flex-none mr-2 mt-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
-                style={{ color: agent.color }}
+                className="size-7 rounded-xl flex items-center justify-center flex-none mr-2 mt-1 border"
+                style={{
+                  color: agent.color,
+                  backgroundColor: `color-mix(in srgb, ${agent.color} 12%, transparent)`,
+                  borderColor: `color-mix(in srgb, ${agent.color} 26%, transparent)`,
+                }}
               >
-                {" "}
                 <IconComponent className="size-3.5" />
               </div>
-              <div className="px-4 py-3 rounded-2xl bg-white/70 dark:bg-zinc-800/70 backdrop-blur-md border border-zinc-200 dark:border-zinc-700 shadow-sm">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className="agent-thinking-dot size-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500"
-                    style={{ animationDelay: "0s" }}
-                  />
-                  <span
-                    className="agent-thinking-dot size-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500"
-                    style={{ animationDelay: "0.15s" }}
-                  />
-                  <span
-                    className="agent-thinking-dot size-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500"
-                    style={{ animationDelay: "0.3s" }}
-                  />
+              <div className="oc-bubble oc-bubble-them">
+                <div className="flex items-center gap-1.5 py-0.5">
+                  {[0, 0.15, 0.3].map((d) => (
+                    <span
+                      key={d}
+                      className="agent-thinking-dot size-1.5 rounded-full bg-ink-faint"
+                      style={{ animationDelay: `${d}s` }}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
@@ -801,7 +1051,7 @@ export default function AgentChatPage() {
       {hasUnseenMessages && !isAtBottom && (
         <button
           onClick={() => scrollToBottom("smooth")}
-          className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 rounded-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-3.5 py-2 text-xs font-medium shadow-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+          className="oc-btn-accent oc-focus absolute bottom-24 left-1/2 -translate-x-1/2 z-20 rounded-full px-4 py-2 text-xs font-semibold"
         >
           ↓ New messages
         </button>
@@ -809,7 +1059,7 @@ export default function AgentChatPage() {
 
       {agent.status !== "coming_soon" && (
         <div className="flex-none px-4 pb-4 pt-2 max-w-3xl mx-auto w-full">
-          <div className="flex items-end gap-2 rounded-2xl px-4 py-2 agent-input-bar bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          <div className="oc-composer flex items-end gap-2 px-3 py-2">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -817,21 +1067,13 @@ export default function AgentChatPage() {
               onChange={(e) => setInput(e.target.value)}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder={`Message ${agent.name}...`}
-              className="flex-1 bg-transparent text-[14px] text-neutral-800 dark:text-zinc-100 placeholder:text-neutral-300 dark:placeholder:text-zinc-500 focus:outline-none resize-none h-9 py-2 leading-snug"
+              placeholder={`Message ${agent.name}…`}
+              className="flex-1 bg-transparent text-[14.5px] text-ink placeholder:text-ink-faint focus:outline-none resize-none h-9 py-2 leading-snug"
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isThinking}
-              className={`size-8 flex-none rounded-xl flex items-center justify-center transition-all duration-200 mb-0.5 ${
-                input.trim()
-                  ? "bg-zinc-900 dark:bg-blue-600 text-white shadow-sm"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
-              }`}
-              style={{
-                opacity: isThinking ? 0.5 : 1,
-                transform: input.trim() ? "scale(1)" : "scale(0.9)",
-              }}
+              disabled={!input.trim() || busy}
+              className="oc-btn-accent oc-focus size-8 flex-none rounded-xl flex items-center justify-center mb-0.5 disabled:cursor-not-allowed"
             >
               <IoSend className="size-3.5" />
             </button>
@@ -839,6 +1081,31 @@ export default function AgentChatPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function ToolChip({ part }: { part: ToolUIPart | DynamicToolUIPart }) {
+  const name = getToolOrDynamicToolName(part);
+  const label = TOOL_LABELS[name] ?? name;
+  const running =
+    part.state === "input-streaming" || part.state === "input-available";
+  const errored = part.state === "output-error";
+
+  const icon = errored ? "✕" : running ? "⟳" : "✓";
+  const tone = errored
+    ? "border-red-500/40 text-red-500"
+    : running
+      ? "border-accent/40 text-accent"
+      : "border-line text-ink-muted";
+
+  return (
+    <span
+      className={`text-[10.5px] px-2 py-0.5 rounded-full border bg-surface-2 font-medium font-mono tracking-wide inline-flex items-center gap-1 ${tone}`}
+    >
+      <span className={running ? "agent-tool-spin" : ""}>{icon}</span>
+      {label}
+      {running ? "…" : ""}
+    </span>
   );
 }
 

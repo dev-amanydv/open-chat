@@ -47,9 +47,15 @@ export default defineSchema({
         }),
       ),
     ),
+    embedding: v.optional(v.array(v.float64())),
   })
     .index("by_conversation", ["conversationId"])
-    .index("by_conversation_status", ["conversationId", "status"]),
+    .index("by_conversation_status", ["conversationId", "status"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["conversationId"],
+    }),
   typingIndicators: defineTable({
     userId: v.id("users"),
     conversationId: v.id("conversations"),
@@ -70,6 +76,7 @@ export default defineSchema({
     chatId: v.id("agentChats"),
     role: v.union(v.literal("user"), v.literal("agent")),
     content: v.string(),
+    uiParts: v.optional(v.string()),
     booking: v.optional(
       v.object({
         title: v.string(),

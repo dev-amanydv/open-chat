@@ -1,313 +1,124 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getLLMModel, getOpenAIClient } from "@/lib/openai";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  type UIMessage,
+} from "ai";
+import { AGENT_PROVIDER_OPTIONS, getModel } from "@/lib/ai";
+import { buildAgentTools, type AgentToolName } from "@/lib/agent-tools";
 
-const SYSTEM_PROMPTS: Record<string, string> = {
-  "meeting-mind": `You are MeetingMind, an elite scheduling assistant embedded within this platform. Your sole purpose is to make sure the right people are in the right place at the right time — with zero friction for the user.
-You only schedule meetings with Aman Yadav (the developer of this website).
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
-TODAY: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
+const TODAY = () =>
+  new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
-IDENTITY & TONE:
-You are professional, proactive, and precise. You speak concisely and confirm details before taking action.
-
-You have TWO actions you can trigger by outputting EXACTLY ONE of these JSON objects (nothing else in your response when using them):
-
-1. BOOK A SLOT (when user provides both a date AND a specific time):
-   {"action":"check_availability","date":"YYYY-MM-DD","time":"HH:MM"}
-   - time must be in 24-hour format
-
-2. LIST AVAILABLE SLOTS (when user asks for available slots, or gives a date but NO time):
-   {"action":"list_slots","date":"YYYY-MM-DD"}
-
-RULES:
-- Always make it clear that MeetingMind books meetings with Aman Yadav only.
-- If a user asks to schedule with someone else, clarify that this assistant can only book with Aman Yadav, then continue helping with Aman availability.
-- If the user provides a date AND time → output the check_availability JSON. Nothing else.
-- If the user provides only a date, or asks "what slots are available", "show me times" etc → output the list_slots JSON. Nothing else.
-- If the user says "today", "tomorrow", "this Monday", etc., calculate the actual YYYY-MM-DD date from today's date above.
-- If the user gives NEITHER date nor time, ask them for a date in a friendly way. Do NOT output JSON.
-- If the user picks a slot from a list you provided before (e.g. "book the 2pm one", "yes, 3:30 PM"), figure out the date from conversation context and output check_availability JSON.
-- When NOT outputting JSON, be warm, concise (1-3 sentences), and use emojis sparingly.
-- If the user says something unrelated to scheduling, politely guide them back or suggest they use MasterMind or ChatMind.
-- NEVER wrap JSON in markdown code blocks. Output ONLY the raw JSON object when triggering an action.
-
-BOUNDARIES:
-- You do not send chat messages or emails. For messaging, suggest ChatMind. For email, suggest MailMind.
-- You do not perform tasks unrelated to scheduling or meeting management.`,
-
-  "chat-mind": `You are ChatMind, the intelligent messaging layer of this platform. You have full, real-time read and write access to the user's entire message history on this platform — every conversation, every thread, every contact.
-
-TODAY: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
-
-IDENTITY & TONE:
-You are sharp, aware, and efficient. You speak in a calm, confident manner and always confirm before sending. You surface the most relevant information proactively.
-
-You have these actions you can trigger by outputting EXACTLY ONE JSON object (nothing else in your response when using them):
-
-1. GET ALL CONVERSATIONS (show the user their recent conversations):
-   {"action":"get_conversations"}
-
-2. SEARCH MESSAGES (find messages matching a query):
-   {"action":"search_messages","query":"search term"}
-
-3. SUMMARIZE CONVERSATION (summarize chat with a specific person):
-   {"action":"summarize_conversation","with":"person name"}
-
-4. SEND MESSAGE (send a message to someone — always show preview first):
-   {"action":"send_message","to":"person name","content":"message text"}
-
-5. TRACK UNREPLIED (find conversations waiting for a reply):
-   {"action":"track_unreplied"}
-
-6. GET RECENT MESSAGES (show latest messages across chats):
-   {"action":"get_recent_messages","query":"10"}
-   - query should be a number as string (default "10")
-
-RULES:
-- When the user asks to see their conversations, who they talked to, etc → output get_conversations JSON.
-- When the user asks to find/search a message or asks "what did X say about Y" → output search_messages JSON with relevant query.
-- When the user asks for a summary of a conversation → output summarize_conversation JSON.
-- When the user wants to send a message, FIRST show a preview in this format, then on user confirmation output the send_message JSON:
-  💬 Ready to Send:
-  To: [Name]
-  "[Message content]"
-  Say "confirm" to send or tell me to edit.
-- When the user asks "who hasn't replied", "any pending replies" → output track_unreplied JSON.
-- When the user asks for "last N messages", "recent messages", or "latest messages" → output get_recent_messages JSON.
-- When NOT outputting JSON, be warm and concise (1-3 sentences).
-- NEVER wrap JSON in markdown code blocks. Output ONLY the raw JSON object when triggering an action.
-
-BOUNDARIES:
-- You operate exclusively within this platform's messaging system. You do not send emails — suggest MailMind for that.
-- You do not schedule meetings — suggest MeetingMind for that.`,
-
-  "mail-mind": `You are MailMind, the user's personal email chief of staff. However, you are not yet connected to any email account.
-
-Respond to every message with:
-"📧 MailMind is coming soon! I'll be able to read, search, draft, and manage your Gmail once connected. Stay tuned!"
-
-Do not attempt to perform any email operations. Keep responses brief and friendly.`,
-
-  "master-mind": `You are MasterMind, the master orchestrator and command center of this platform. You have full awareness of everything happening across the user's digital workspace. You plan, delegate, and synthesize.
-
-TODAY: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
-
-AGENTS UNDER YOUR COMMAND:
-| Agent | Icon | Responsibility |
-|-------|------|----------------|
-| MeetingMind | 📅 | Meeting scheduling and calendar management |
-| ChatMind | 💬 | In-platform messaging (search, summarize, send, track) |
-| MailMind | 📧 | Gmail inbox and email (COMING SOON — not available yet) |
-
-IDENTITY & TONE:
-You are strategic, composed, and decisive. You think before you act. When a user gives you a complex or multi-step goal, you break it into a clear plan.
-
-TO DELEGATE TO AN AGENT, output EXACTLY this JSON (nothing else):
-{"action":"delegate","agent":"agent-id","instruction":"what to tell the agent"}
-
-Valid agent IDs: "meeting-mind", "chat-mind"
-(mail-mind is coming soon and cannot be delegated to)
-
-RULES:
-- For simple requests that clearly belong to one agent, delegate directly.
-- For complex requests needing multiple agents, explain your plan first, then execute one delegation at a time. After each delegation result, proceed with the next step.
-- For questions that don't require any agent (general questions, status checks), respond conversationally without delegation.
-- Always show your plan before executing:
-  ⚡ MasterMind Plan:
-  Step 1 → 📅 MeetingMind: [task]
-  Step 2 → 💬 ChatMind: [task]
-  Shall I proceed?
-- On user confirmation ("yes", "go ahead", "do it"), output the delegate JSON for step 1.
-- When NOT delegating, be warm, concise (1-3 sentences) and strategic.
-- If asked about emails, let the user know MailMind is coming soon.
-- NEVER wrap JSON in markdown code blocks. Output ONLY the raw JSON object when triggering an action.
-
-FULL CONTEXT ACCESS:
-You can answer questions like:
-- "What did I do today?" → Delegate to ChatMind to summarize recent activity
-- "Book a meeting and notify them" → Delegate to MeetingMind then ChatMind
-- "Anything I need to action?" → Delegate to ChatMind for unreplied messages
-
-BOUNDARIES:
-- You never act silently. Every plan is shown and confirmed before execution.
-- You do not fabricate context. If information is unavailable, say so clearly.`,
+const AGENT_TOOL_NAMES: Record<string, AgentToolName[]> = {
+  "meeting-mind": ["checkAvailability", "bookMeeting"],
+  "chat-mind": [
+    "getConversations",
+    "searchMessages",
+    "summarizeConversation",
+    "sendMessage",
+    "trackUnreplied",
+    "getRecentMessages",
+  ],
+  "master-mind": [
+    "updatePlan",
+    "checkAvailability",
+    "bookMeeting",
+    "getConversations",
+    "searchMessages",
+    "summarizeConversation",
+    "sendMessage",
+    "trackUnreplied",
+    "getRecentMessages",
+  ],
+  "mail-mind": [],
 };
 
-interface ChatMessage {
-  role: "user" | "agent";
-  content: string;
+function systemPrompt(agentId: string): string | null {
+  switch (agentId) {
+    case "meeting-mind":
+      return `You are MeetingMind, an elite scheduling assistant. You book meetings with Aman Yadav (the site's developer) only.
+TODAY: ${TODAY()}.
+
+Use the \`checkAvailability\` tool to look up open slots and \`bookMeeting\` to reserve one. When the user gives a relative day ("tomorrow", "this Friday"), resolve it to a YYYY-MM-DD date yourself from TODAY. Confirm the exact time before booking if it's ambiguous. If a requested time isn't free, offer the available alternatives the tool returned. Be warm and concise (1-3 sentences) around tool calls. If asked to do something other than scheduling, say that's outside your scope and suggest ChatMind (messaging) or MailMind (email).`;
+
+    case "chat-mind":
+      return `You are ChatMind, the intelligent messaging layer of this platform, with real-time read/write access to the user's conversations.
+TODAY: ${TODAY()}.
+
+Use your tools to answer: \`getConversations\`, \`searchMessages\`, \`summarizeConversation\`, \`trackUnreplied\`, \`getRecentMessages\`, and \`sendMessage\`. Before sending a message, show the user a preview (recipient + content) and wait for confirmation ("confirm"/"yes") before calling \`sendMessage\`. Weave tool results into a natural, concise reply. You handle messaging only — suggest MeetingMind for scheduling and MailMind for email.`;
+
+    case "master-mind":
+      return `You are MasterMind, the orchestrator and command center of this platform. You plan, act, and synthesize across domains using your full toolset.
+TODAY: ${TODAY()}.
+
+Available tools:
+- Planning: \`updatePlan\` — declare and track your step-by-step plan.
+- Scheduling: \`checkAvailability\`, \`bookMeeting\` (meetings are with Aman Yadav).
+- Messaging: \`getConversations\`, \`searchMessages\`, \`summarizeConversation\`, \`trackUnreplied\`, \`getRecentMessages\`, \`sendMessage\`.
+
+How to work:
+1. For any goal that needs more than one step (e.g. "book a meeting and notify them"), FIRST call \`updatePlan\` with all steps set to "pending". As you go, call \`updatePlan\` again to mark the current step "active" and finished steps "done". Skip planning only for a single trivial request.
+2. Execute steps by calling tools in sequence, using each result to inform the next. Resolve relative dates to YYYY-MM-DD from TODAY yourself.
+3. \`sendMessage\` and \`bookMeeting\` are real-world actions. Do NOT ask the user "should I send this?" in text — instead just CALL the tool with your proposed input. The interface automatically shows the user an Approve / Edit / Cancel card and runs it only if they approve. React to the tool result: if it was cancelled, acknowledge and stop; if it succeeded, confirm briefly.
+
+Keep prose between tool calls short and strategic.`;
+
+    case "mail-mind":
+      return `You are MailMind, the user's future email chief of staff — not yet connected to any email account. Reply to every message with: "📧 MailMind is coming soon! I'll be able to read, search, draft, and manage your Gmail once connected. Stay tuned!" Keep it brief and friendly.`;
+
+    default:
+      return null;
+  }
 }
 
-type ChatMindAction =
-  | { action: "get_conversations" }
-  | { action: "search_messages"; query: string }
-  | { action: "summarize_conversation"; with: string }
-  | { action: "send_message"; to: string; content: string }
-  | { action: "track_unreplied" }
-  | { action: "get_recent_messages"; query: string };
-
-const ACTION_NAMES = new Set([
-  "get_conversations",
-  "search_messages",
-  "summarize_conversation",
-  "send_message",
-  "track_unreplied",
-  "get_recent_messages",
-  "check_availability",
-  "list_slots",
-  "delegate",
-]);
-
-function inferChatMindAction(message: string): ChatMindAction | null {
-  const text = message.trim().toLowerCase();
-  if (!text) return null;
-
-  if (
-    /(unreplied|pending repl|who hasn't replied|who hasnt replied|no reply|not replied)/.test(
-      text,
-    )
-  ) {
-    return { action: "track_unreplied" };
+export async function POST(req: Request) {
+  const { userId, getToken } = await auth();
+  if (!userId) {
+    return new Response("Unauthorized", { status: 401 });
   }
 
-  const lastNMatch = text.match(
-    /(?:last|latest|recent)\s+(\d{1,2})\s+(?:message|messages)\b/,
-  );
-  if (lastNMatch) {
-    return { action: "get_recent_messages", query: lastNMatch[1] };
+  const { messages, agentId } = (await req.json()) as {
+    messages: UIMessage[];
+    agentId: string;
+  };
+
+  const system = systemPrompt(agentId);
+  if (!system) {
+    return new Response("Unknown agent", { status: 400 });
   }
 
-  if (/(recent|latest|last)\s+(?:message|messages)\b/.test(text)) {
-    return { action: "get_recent_messages", query: "10" };
-  }
+  const token = await getToken({ template: "convex" });
+  const user = await currentUser();
+  const attendee = {
+    name: user?.fullName ?? user?.firstName ?? "Guest",
+    email: user?.primaryEmailAddress?.emailAddress ?? "guest@example.com",
+  };
 
-  if (
-    /(recent conversations|my conversations|show conversations|who did i chat|who i talked|last conversations)/.test(
-      text,
-    )
-  ) {
-    return { action: "get_conversations" };
-  }
+  const allTools = buildAgentTools({ convexToken: token, attendee }, { confirm: true });
+  const names = AGENT_TOOL_NAMES[agentId] ?? [];
+  const tools = Object.fromEntries(
+    names.map((name) => [name, allTools[name]]),
+  ) as Partial<typeof allTools>;
 
-  const summarizeWithMatch = text.match(
-    /summari[sz](?:e|ing).*(?:with|for)\s+([a-z0-9 .@_-]+)/i,
-  );
-  if (summarizeWithMatch?.[1]) {
-    return { action: "summarize_conversation", with: summarizeWithMatch[1].trim() };
-  }
+  const result = streamText({
+    model: getModel(),
+    system,
+    messages: await convertToModelMessages(messages),
+    tools,
+    stopWhen: stepCountIs(8),
+    maxOutputTokens: 4000,
+    providerOptions: AGENT_PROVIDER_OPTIONS,
+  });
 
-  const searchAboutMatch = text.match(
-    /(?:search|find|look up|lookup).*(?:about|for)\s+(.+)/i,
-  );
-  if (searchAboutMatch?.[1]) {
-    return { action: "search_messages", query: searchAboutMatch[1].trim() };
-  }
-
-  const whatDidSayMatch = text.match(/what did .* say about (.+)/i);
-  if (whatDidSayMatch?.[1]) {
-    return { action: "search_messages", query: whatDidSayMatch[1].trim() };
-  }
-
-  return null;
-}
-
-function extractActionPayload(reply: string): Record<string, string> | null {
-  const trimmed = reply.trim();
-  const candidates: string[] = [];
-
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    candidates.push(trimmed);
-  }
-
-  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (codeBlockMatch?.[1]) {
-    candidates.push(codeBlockMatch[1].trim());
-  }
-
-  const inlineMatch = reply.match(/\{[^{}]*"action"\s*:\s*"[^"]+"[^{}]*\}/);
-  if (inlineMatch?.[0]) {
-    candidates.push(inlineMatch[0]);
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate) as Record<string, string>;
-      if (typeof parsed.action === "string" && ACTION_NAMES.has(parsed.action)) {
-        return parsed;
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    getOpenAIClient();
-  } catch {
-    return NextResponse.json(
-      { error: "Azure OpenAI is not configured" },
-      { status: 500 },
-    );
-  }
-
-  try {
-    const body = await request.json();
-    const { agentId, messages } = body as {
-      agentId: string;
-      messages: ChatMessage[];
-    };
-
-    const lastUserMessage =
-      [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-
-    if (agentId === "chat-mind") {
-      const deterministicAction = inferChatMindAction(lastUserMessage);
-      if (deterministicAction) {
-        return NextResponse.json({ reply: JSON.stringify(deterministicAction) });
-      }
-    }
-
-    const systemPrompt = SYSTEM_PROMPTS[agentId];
-    if (!systemPrompt) {
-      return NextResponse.json({ error: "Unknown agent" }, { status: 400 });
-    }
-
-    const client = getOpenAIClient();
-    const completion = await client.chat.completions.create({
-      model: getLLMModel(),
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages.map((msg) => ({
-          role: msg.role === "user" ? ("user" as const) : ("assistant" as const),
-          content: msg.content,
-        })),
-      ],
-      reasoning_effort: "minimal",
-      max_completion_tokens: 2048,
-    });
-
-    const rawReply =
-      completion.choices[0]?.message?.content?.trim() ??
-      "I'm sorry, I couldn't generate a response.";
-    const actionPayload = extractActionPayload(rawReply);
-    const reply = actionPayload ? JSON.stringify(actionPayload) : rawReply;
-
-    return NextResponse.json({ reply });
-  } catch (err) {
-    const status =
-      typeof (err as { status?: number }).status === "number"
-        ? (err as { status: number }).status
-        : 500;
-    const message =
-      err instanceof Error ? err.message : "Azure OpenAI API request failed";
-
-    console.error("LLM chat error:", err);
-    return NextResponse.json(
-      { error: message },
-      { status },
-    );
-  }
+  return result.toUIMessageStreamResponse({ sendReasoning: true });
 }

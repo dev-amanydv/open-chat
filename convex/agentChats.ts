@@ -47,6 +47,7 @@ export const sendMessage = mutation({
     chatId: v.id("agentChats"),
     role: v.union(v.literal("user"), v.literal("agent")),
     content: v.string(),
+    uiParts: v.optional(v.string()),
     booking: v.optional(
       v.object({
         title: v.string(),
@@ -63,6 +64,7 @@ export const sendMessage = mutation({
       chatId: args.chatId,
       role: args.role,
       content: args.content,
+      uiParts: args.uiParts,
       booking: args.booking,
     });
 

@@ -11,6 +11,8 @@
 import type * as agentChats from "../agentChats.js";
 import type * as chatMind from "../chatMind.js";
 import type * as chats from "../chats.js";
+import type * as embeddings from "../embeddings.js";
+import type * as search from "../search.js";
 import type * as typing from "../typing.js";
 import type * as user from "../user.js";
 
@@ -24,6 +26,8 @@ declare const fullApi: ApiFromModules<{
   agentChats: typeof agentChats;
   chatMind: typeof chatMind;
   chats: typeof chats;
+  embeddings: typeof embeddings;
+  search: typeof search;
   typing: typeof typing;
   user: typeof user;
 }>;

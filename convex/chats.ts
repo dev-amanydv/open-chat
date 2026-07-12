@@ -1,6 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 function buildDirectKey(userA: string, userB: string) {
   return [userA, userB].sort().join("::");
@@ -209,7 +210,7 @@ export const sendMessage = mutation({
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) throw new Error("Conversation not found");
 
-    await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       sender: currentUser._id,
       content: args.content,
@@ -219,6 +220,9 @@ export const sendMessage = mutation({
         readAt: "",
       },
       isDeleted: false,
+    });
+    await ctx.scheduler.runAfter(0, internal.embeddings.embedMessage, {
+      messageId,
     });
 
     const unreadCounts = parseUnreadCounts(
@@ -281,6 +285,84 @@ export const getConversationByUsers = query({
     );
 
     return existing ?? null;
+  },
+});
+
+export const getSuggestionContext = query({
+  args: {
+    conversationId: v.id("conversations"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+    if (!currentUser) return null;
+
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) return null;
+    if (!conversation.participants.includes(currentUser._id)) return null;
+
+    const limit = Math.min(Math.max(args.limit ?? 12, 1), 30);
+    const recent = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", args.conversationId),
+      )
+      .order("desc")
+      .take(limit);
+    recent.reverse();
+
+    const nameCache = new Map<string, string>();
+    const resolveName = async (senderId: string) => {
+      if (senderId === currentUser._id) return "Me";
+      if (nameCache.has(senderId)) return nameCache.get(senderId)!;
+      const user = await ctx.db.get(senderId as Id<"users">);
+      const name = user?.name ?? "Someone";
+      nameCache.set(senderId, name);
+      return name;
+    };
+
+    const messages = [];
+    for (const msg of recent) {
+      if (msg.isDeleted) continue;
+      const content = msg.content.trim();
+      if (!content) continue;
+      messages.push({
+        fromMe: msg.sender === currentUser._id,
+        senderName: await resolveName(msg.sender),
+        content,
+      });
+    }
+
+    let otherName = "them";
+    if (conversation.isGroup) {
+      otherName = conversation.name ?? "the group";
+    } else {
+      const otherId = conversation.participants.find(
+        (p) => p !== currentUser._id,
+      );
+      if (otherId) {
+        const other = await ctx.db.get(otherId as Id<"users">);
+        otherName = other?.name ?? "them";
+      }
+    }
+
+    const lastFromMe =
+      messages.length > 0 ? messages[messages.length - 1].fromMe : false;
+
+    return {
+      messages,
+      otherName,
+      isGroup: conversation.isGroup === true,
+      lastFromMe,
+    };
   },
 });
 
@@ -491,43 +573,6 @@ export const toggleReaction = mutation({
     }
 
     await ctx.db.patch(args.messageId, { reactions });
-  },
-});
-
-export const createGroup = mutation({
-  args: {
-    participants: v.array(v.id("users")),
-    name: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthenticated");
-
-    const currentUser = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-    if (!currentUser) throw new Error("User not found");
-
-    const participants = [...new Set([...args.participants, currentUser._id])];
-
-    const unreadCounts: Record<string, number> = {};
-    participants.forEach((p) => {
-      unreadCounts[p] = 0;
-    });
-
-    return await ctx.db.insert("conversations", {
-      participants,
-      isGroup: true,
-      name: args.name,
-      admin: currentUser._id,
-      lastMessage: "",
-      lastMessageTime: Date.now(),
-      lastMessageStatus: "seen",
-      unreadCounts: JSON.stringify(unreadCounts),
-    });
   },
 });
 

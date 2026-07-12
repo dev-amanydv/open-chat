@@ -9,6 +9,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Id } from "@/convex/_generated/dataModel";
 import { useEffect } from "react";
 import { FiChevronLeft } from "react-icons/fi";
+import Avatar from "@/components/Avatar";
 
 const ONLINE_WINDOW_MS = 75_000;
 
@@ -85,61 +86,55 @@ export default function ChatLayout({
             chatInfo === undefined ? (
               <ChatHeaderSkeleton />
             ) : chatInfo === null ? (
-              <div className="bg-[#FAFAFB] dark:bg-zinc-900 flex-none px-3 flex items-center border-[#ECECEE] dark:border-zinc-800 w-full h-14 border-b gap-3">
+              <div className="oc-frost flex-none px-3 flex items-center border-line w-full h-16 border-b gap-3">
                 <button
                   onClick={() => router.push("/chats")}
-                  className="md:hidden p-2 -ml-2 rounded-full hover:bg-neutral-200 dark:hover:bg-zinc-800 transition-colors"
+                  className="oc-icon-btn oc-focus md:hidden size-9 -ml-1"
                 >
-                  <FiChevronLeft className="text-xl text-neutral-600 dark:text-neutral-400" />
+                  <FiChevronLeft className="text-xl" />
                 </button>
-                <div className="flex gap-3">
-                  <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
-                    Chat not found
-                  </p>
-                </div>
+                <p className="text-sm font-medium text-ink-muted">
+                  Chat not found
+                </p>
               </div>
             ) : (
-              <div className="bg-[#FAFAFB] dark:bg-zinc-900 flex-none px-3 flex items-center border-[#ECECEE] dark:border-zinc-800 w-full h-14 border-b gap-3">
+              <div className="oc-frost flex-none px-3 flex items-center border-line w-full h-16 border-b gap-3">
                 <button
                   onClick={() => router.push("/chats")}
-                  className="md:hidden p-2 -ml-2 rounded-full hover:bg-neutral-200 dark:hover:bg-zinc-800 transition-colors"
+                  className="oc-icon-btn oc-focus md:hidden size-9 -ml-1"
                 >
-                  <FiChevronLeft className="text-xl text-neutral-600 dark:text-neutral-400" />
+                  <FiChevronLeft className="text-xl" />
                 </button>
-                <div className="flex gap-3">
-                  <div className="border-neutral-200 dark:border-zinc-700 relative border size-10 bg-white dark:bg-zinc-800 rounded-full flex items-center justify-center text-sm font-semibold text-neutral-500 dark:text-neutral-400 overflow-hidden shrink-0">
-                    {!chatInfo.isGroup && chatInfo.imageUrl ? (
-                      <img
-                        src={chatInfo.imageUrl}
-                        alt={chatInfo.name}
-                        className="size-full object-cover"
-                      />
-                    ) : (
-                      (chatInfo.name?.charAt(0).toUpperCase() ?? "?")
-                    )}
-                    {!chatInfo.isGroup &&
-                    chatInfo.lastSeen &&
-                    // eslint-disable-next-line react-hooks/purity
-                    Date.now() - chatInfo.lastSeen < ONLINE_WINDOW_MS ? (
-                      <span className="size-2 bg-green-400 rounded-full absolute bottom-0 right-0"></span>
-                    ) : null}
-                  </div>
+                <div className="flex gap-3 items-center">
+                  <Avatar
+                    name={chatInfo.name ?? "?"}
+                    imageUrl={!chatInfo.isGroup ? chatInfo.imageUrl : undefined}
+                    sizeClass="size-10"
+                    radiusClass="rounded-xl"
+                    online={
+                      !chatInfo.isGroup &&
+                      !!chatInfo.lastSeen &&
+                      // eslint-disable-next-line react-hooks/purity
+                      Date.now() - chatInfo.lastSeen < ONLINE_WINDOW_MS
+                    }
+                  />
                   <div className="flex flex-col min-w-0 justify-center">
-                    <h1 className="font-semibold text-sm truncate dark:text-zinc-100">
+                    <h1 className="font-semibold text-[15px] truncate text-ink tracking-tight">
                       {chatInfo.name}
                     </h1>
                     {chatInfo.isGroup ? (
-                      <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                      <span className="text-xs text-ink-faint">
                         {chatInfo.memberCount} members
                       </span>
                     ) : chatInfo.lastSeen &&
                       // eslint-disable-next-line react-hooks/purity
                       Date.now() - chatInfo.lastSeen < ONLINE_WINDOW_MS ? (
-                      <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                      <span className="text-xs text-positive font-medium flex items-center gap-1.5">
+                        <span className="oc-online size-1.5 rounded-full" />
                         Online
                       </span>
                     ) : (
-                      <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                      <span className="text-xs text-ink-faint">
                         Last seen{" "}
                         {chatInfo.lastSeen
                           ? timeAgo(chatInfo.lastSeen)

@@ -1,7 +1,7 @@
 "use client";
 
 import Navbar from "@/components/Navbar";
-import AgentSidebar from "@/components/AgentSidebar";
+import Sidebar from "@/components/Sidebar";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect } from "react";
@@ -49,11 +49,11 @@ export default function AgentsLayout({
       <div
         className={`md:flex ${agentId ? "hidden" : "flex"} flex-1 min-w-0 md:flex-none md:w-80 h-full`}
       >
-        <AgentSidebar />
+        <Sidebar />
       </div>
       <div className={`w-full h-full ${agentId ? "flex" : "hidden md:flex"}`}>
         <div className="h-full flex flex-col w-full">
-          <div className="flex-1 min-h-0 bg-[#fafafa]">{children}</div>
+          <div className="flex-1 min-h-0">{children}</div>
         </div>
       </div>
     </main>

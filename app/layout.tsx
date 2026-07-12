@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Onest, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { ClerkProvider } from "@clerk/nextjs";
@@ -6,6 +7,17 @@ import { Toaster } from "react-hot-toast";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+
+const onest = Onest({
+  subsets: ["latin"],
+  variable: "--font-onest",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-jb",
+  display: "swap",
+});
 
 const siteUrl =
   process.env.NEXT_PUBLIC_APP_URL ??
@@ -62,7 +74,11 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <ConvexClientProvider>
-        <html lang="en" suppressHydrationWarning>
+        <html
+          lang="en"
+          suppressHydrationWarning
+          className={`${onest.variable} ${jetbrainsMono.variable}`}
+        >
           <body className="antialiased">
             <ThemeProvider
               attribute="class"
