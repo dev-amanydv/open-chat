@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams, usePathname } from "next/navigation";
 import { CiSearch } from "react-icons/ci";
 import { RiCheckDoubleFill, RiCheckFill } from "react-icons/ri";
-import { HiOutlineSparkles } from "react-icons/hi2";
+import { HiOutlineMagnifyingGlass } from "react-icons/hi2";
 import SidebarSkeleton from "@/components/skeletons/SidebarSkeleton";
 import SemanticSearchModal from "./SemanticSearchModal";
 import Avatar from "./Avatar";
@@ -237,7 +237,7 @@ export default function Sidebar() {
           className="oc-icon-btn oc-focus size-9"
           title="Semantic search (⌘K)"
         >
-          <HiOutlineSparkles className="size-[18px]" />
+          <HiOutlineMagnifyingGlass className="size-[18px]" />
         </button>
       </div>
       <div className="flex flex-none items-center relative px-0.5">

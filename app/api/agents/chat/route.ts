@@ -138,5 +138,10 @@ export async function POST(req: Request) {
     providerOptions: AGENT_PROVIDER_OPTIONS,
   });
 
-  return result.toUIMessageStreamResponse();
+  return result.toUIMessageStreamResponse({
+    onError: (error) => {
+      console.error("[agents/chat] stream error:", error);
+      return error instanceof Error ? error.message : String(error);
+    },
+  });
 }

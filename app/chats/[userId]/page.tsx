@@ -19,7 +19,7 @@ import {
   RiCheckDoubleFill,
   RiCheckFill,
 } from "react-icons/ri";
-import { HiOutlineSparkles } from "react-icons/hi2";
+import { HiOutlineArrowUturnLeft } from "react-icons/hi2";
 import { Id, Doc } from "@/convex/_generated/dataModel";
 import ChatPageSkeleton from "@/components/skeletons/ChatPageSkeleton";
 import TypingIndicator from "@/components/TypingIndicator";
@@ -946,7 +946,7 @@ export default function ChatPage() {
         {showSuggestBar && (
           <div className="max-w-3xl mx-auto mb-2.5 flex items-center gap-2 overflow-x-auto oc-scroll pb-0.5">
             <span className="flex-none flex items-center gap-1 text-[10px] font-mono uppercase tracking-[0.12em] text-ink-faint pr-0.5">
-              <HiOutlineSparkles
+              <HiOutlineArrowUturnLeft
                 className={`size-3 ${showSuggestShimmer ? "text-accent" : ""}`}
               />
               {showSuggestShimmer ? "Thinking" : "Reply"}

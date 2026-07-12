@@ -10,7 +10,7 @@ import {
   BsClock,
   BsPersonFill,
 } from "react-icons/bs";
-import { HiSparkles } from "react-icons/hi2";
+import { HiCheck } from "react-icons/hi2";
 import {
   HiOutlineHandThumbUp,
   HiHandThumbUp,
@@ -710,7 +710,7 @@ function AgentChat({
                   className="absolute -top-1 -right-1 size-6 rounded-full flex items-center justify-center border-2 border-surface"
                   style={{ backgroundColor: agent.color }}
                 >
-                  <HiSparkles className="size-3.5 text-white" />
+                  <HiCheck className="size-3.5 text-white" />
                 </div>
               </div>
 

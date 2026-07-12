@@ -5,7 +5,7 @@ import { useAction } from "convex/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CiSearch } from "react-icons/ci";
-import { HiOutlineSparkles } from "react-icons/hi2";
+import { HiOutlineMagnifyingGlass } from "react-icons/hi2";
 
 type SearchHit = {
   id: string;
@@ -156,7 +156,7 @@ export default function SemanticSearchModal({
           {!loading && !error && !hasSearched && query.trim() === "" && (
             <div className="px-4 py-9 text-center">
               <div className="oc-glow relative size-11 mx-auto mb-3 rounded-2xl bg-accent-soft grid place-items-center">
-                <HiOutlineSparkles className="size-5 text-accent" />
+                <HiOutlineMagnifyingGlass className="size-5 text-accent" />
               </div>
               <p className="text-sm text-ink-muted">
                 Find messages by what they mean, not just exact words.
@@ -200,8 +200,8 @@ export default function SemanticSearchModal({
         </div>
 
         <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-line text-[11px] text-ink-faint font-mono">
-          <HiOutlineSparkles className="size-3.5" />
-          semantic search · powered by embeddings
+          <HiOutlineMagnifyingGlass className="size-3.5" />
+          semantic search
         </div>
       </div>
     </div>
