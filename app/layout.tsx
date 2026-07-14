@@ -21,8 +21,10 @@ const jetbrainsMono = JetBrains_Mono({
 
 const siteUrl =
   process.env.NEXT_PUBLIC_APP_URL ??
-  process.env.OPENROUTER_SITE_URL ??
-  "https://open-chat.vercel.app";
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : undefined) ??
+  "https://openchat-claw.vercel.app";
 
 const socialImage = "/og-hero.png";
 const githubUrl = "https://github.com/dev-amanydv/open-chat";
@@ -65,11 +67,6 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
-  icons: {
-    icon: [{ url: "/logo.png", type: "image/png", sizes: "any" }],
-    shortcut: "/logo.png",
-    apple: "/logo.png",
-  },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -82,7 +79,8 @@ export const metadata: Metadata = {
       {
         url: socialImage,
         width: 1200,
-        height: 630,
+        height: 800,
+        type: "image/png",
         alt: "Open Chat agent workspace preview",
       },
     ],
