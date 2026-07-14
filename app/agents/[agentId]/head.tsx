@@ -12,6 +12,10 @@ export default function Head() {
         property="og:description"
         content="Execute agentic actions for chat ops and meeting workflows."
       />
+      <meta property="og:image" content="/og-hero.png" />
+      <meta property="og:url" content="/agents" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:image" content="/og-hero.png" />
     </>
   );
 }

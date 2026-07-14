@@ -24,8 +24,13 @@ const siteUrl =
   process.env.OPENROUTER_SITE_URL ??
   "https://open-chat.vercel.app";
 
+const socialImage = "/og-hero.png";
+const githubUrl = "https://github.com/dev-amanydv/open-chat";
+const emailAddress = "ay.work07@gmail.com";
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  applicationName: "Open Chat",
   title: {
     default: "Open Chat - Agentic Messaging and Meeting Automation",
     template: "%s | Open Chat",
@@ -41,20 +46,46 @@ export const metadata: Metadata = {
     "ChatMind",
     "MeetingMind",
     "MasterMind",
+    "Aman Yadav",
   ],
-  authors: [{ name: "Aman Yadav" }],
+  authors: [{ name: "Aman Yadav", url: "https://github.com/dev-amanydv" }],
   creator: "Aman Yadav",
   publisher: "Open Chat",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   alternates: {
     canonical: "/",
   },
+  icons: {
+    icon: [{ url: "/logo.png", type: "image/png", sizes: "any" }],
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
   openGraph: {
     type: "website",
+    locale: "en_US",
     url: "/",
     title: "Open Chat - Agentic Messaging and Meeting Automation",
     description:
       "Automate chats, summaries, scheduling, and follow-ups with specialized agents in one workspace.",
     siteName: "Open Chat",
+    images: [
+      {
+        url: socialImage,
+        width: 1200,
+        height: 630,
+        alt: "Open Chat agent workspace preview",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
@@ -62,6 +93,13 @@ export const metadata: Metadata = {
     description:
       "One workspace for chat automation, meeting booking, and multi-agent task execution.",
     creator: "@amanyadav",
+    images: [socialImage],
+  },
+  other: {
+    github: githubUrl,
+    email: emailAddress,
+    contact: emailAddress,
+    developer: "Aman Yadav",
   },
   category: "technology",
 };

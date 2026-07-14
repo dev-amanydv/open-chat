@@ -457,10 +457,12 @@ export default function AgentChatPage() {
     );
   }
 
+  const handleBack = () => router.push("/");
+
   if (!chatId || persisted === undefined) {
     return (
       <div className="oc-canvas h-full flex flex-col">
-        <AgentHeader agent={agent} onBack={() => router.push("/agents")} />
+        <AgentHeader agent={agent} onBack={handleBack} />
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-1.5">
             {[0, 0.15, 0.3].map((d) => (
@@ -483,7 +485,7 @@ export default function AgentChatPage() {
       agentId={agentId}
       chatId={chatId}
       initial={persisted}
-      onBack={() => router.push("/agents")}
+      onBack={handleBack}
     />
   );
 }
