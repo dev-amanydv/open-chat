@@ -203,13 +203,17 @@ function ApprovalCard({
               <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-mono">
                 Date
               </p>
-              <p className="text-ink font-medium">{String(input.date ?? "—")}</p>
+              <p className="text-ink font-medium">
+                {String(input.date ?? "—")}
+              </p>
             </div>
             <div>
               <p className="text-[10px] text-ink-faint uppercase tracking-[0.1em] font-mono">
                 Time
               </p>
-              <p className="text-ink font-medium">{String(input.time ?? "—")}</p>
+              <p className="text-ink font-medium">
+                {String(input.time ?? "—")}
+              </p>
             </div>
           </div>
         )}
@@ -218,9 +222,7 @@ function ApprovalCard({
       <div className="px-4 pb-3 flex items-center gap-2">
         <button
           disabled={approving}
-          onClick={() =>
-            onApprove(isSend ? { ...input, content } : input)
-          }
+          onClick={() => onApprove(isSend ? { ...input, content } : input)}
           className="oc-btn-accent oc-focus flex items-center gap-1.5 px-3.5 h-8 rounded-lg text-[13px] font-semibold disabled:cursor-not-allowed"
         >
           {approving ? (
@@ -254,7 +256,12 @@ function ApprovalCard({
 function ActionResultChip({ part }: { part: AnyToolPart }) {
   const name = getToolOrDynamicToolName(part);
   const out = part.output as
-    | { cancelled?: boolean; error?: string; booked?: boolean; message?: string }
+    | {
+        cancelled?: boolean;
+        error?: string;
+        booked?: boolean;
+        message?: string;
+      }
     | string
     | undefined;
 
@@ -274,7 +281,11 @@ function ActionResultChip({ part }: { part: AnyToolPart }) {
     out.booked === false
   ) {
     return (
-      <ResultChip tone="error" icon="!" label={out.message ?? "Couldn't book"} />
+      <ResultChip
+        tone="error"
+        icon="!"
+        label={out.message ?? "Couldn't book"}
+      />
     );
   }
   return null;
@@ -327,9 +338,7 @@ function messageBooking(message: UIMessage): BookingDetails | undefined {
 }
 
 function persistableParts(message: UIMessage) {
-  return message.parts.filter(
-    (p) => p.type === "text" || isToolUIPart(p),
-  );
+  return message.parts.filter((p) => p.type === "text" || isToolUIPart(p));
 }
 
 function docToUIMessage(doc: Doc<"agentMessages">): UIMessage {
@@ -668,8 +677,7 @@ function AgentChat({
     setRatings((prev) => ({ ...prev, [cid]: next }));
     try {
       await rateMessage({ messageId: cid as Id<"agentMessages">, rating });
-    } catch {
-    }
+    } catch {}
   };
 
   const lastMessage = messages[messages.length - 1];
@@ -933,9 +941,7 @@ function AgentChat({
                             onApprove={(input) =>
                               runApproval(n, part.toolCallId, input)
                             }
-                            onCancel={() =>
-                              cancelApproval(n, part.toolCallId)
-                            }
+                            onCancel={() => cancelApproval(n, part.toolCallId)}
                           />
                         );
                       }
